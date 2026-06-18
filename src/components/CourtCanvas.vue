@@ -156,7 +156,7 @@ function dribblePath(a: Point, b: Point): string {
   const ny = -(bx - ax) / (len || 1)
   const amp = 6
   let d = `M ${ax} ${ay}`
-  for (let i = 1; i <= segs; i++) {
+  for (let i = 1; i < segs; i++) {
     const t = i / segs
     const cx = ax + (bx - ax) * t
     const cy = ay + (by - ay) * t
@@ -292,13 +292,19 @@ watch(
             <!-- left key + arc -->
             <rect :x="6" :y="H / 2 - 80" :width="190" :height="160" />
             <circle :cx="196" :cy="H / 2" :r="60" />
-            <path :d="`M 6 ${H / 2 - 220} A 237 237 0 0 1 6 ${H / 2 + 220}`" />
+            <!-- left 3-point: straight corner lines + arc centred on basket (56, H/2) r=237 -->
+            <line :x1="6" :y1="H / 2 - 214" :x2="158" :y2="H / 2 - 214" />
+            <line :x1="6" :y1="H / 2 + 214" :x2="158" :y2="H / 2 + 214" />
+            <path :d="`M 158 ${H / 2 - 214} A 237 237 0 0 1 158 ${H / 2 + 214}`" />
             <circle :cx="56" :cy="H / 2" r="9" />
             <line :x1="40" :y1="H / 2 - 30" :x2="40" :y2="H / 2 + 30" />
             <!-- right key + arc -->
             <rect :x="W - 196" :y="H / 2 - 80" :width="190" :height="160" />
             <circle :cx="W - 196" :cy="H / 2" :r="60" />
-            <path :d="`M ${W - 6} ${H / 2 - 220} A 237 237 0 0 0 ${W - 6} ${H / 2 + 220}`" />
+            <!-- right 3-point: straight corner lines + arc centred on basket (W-56, H/2) r=237 -->
+            <line :x1="W - 6" :y1="H / 2 - 214" :x2="W - 158" :y2="H / 2 - 214" />
+            <line :x1="W - 6" :y1="H / 2 + 214" :x2="W - 158" :y2="H / 2 + 214" />
+            <path :d="`M ${W - 158} ${H / 2 - 214} A 237 237 0 0 0 ${W - 158} ${H / 2 + 214}`" />
             <circle :cx="W - 56" :cy="H / 2" r="9" />
             <line :x1="W - 40" :y1="H / 2 - 30" :x2="W - 40" :y2="H / 2 + 30" />
           </template>
@@ -307,7 +313,10 @@ watch(
           <template v-else>
             <rect :x="W / 2 - 80" :y="6" :width="160" :height="190" />
             <circle :cx="W / 2" :cy="196" :r="60" />
-            <path :d="`M ${W / 2 - 220} 6 A 237 237 0 0 0 ${W / 2 + 220} 6`" />
+            <!-- 3-point: straight corner lines (3 ft from each sideline) + arc centred on basket (W/2, 56) r=237 -->
+            <line :x1="36" :y1="6" :x2="36" :y2="158" />
+            <line :x1="W - 36" :y1="6" :x2="W - 36" :y2="158" />
+            <path :d="`M 36 158 A 237 237 0 1 1 ${W - 36} 158`" />
             <circle :cx="W / 2" :cy="56" r="9" />
             <line :x1="W / 2 - 30" :y1="40" :x2="W / 2 + 30" :y2="40" />
             <path :d="`M 6 ${H - 6} A ${W / 2 - 6} ${W / 2 - 6} 0 0 0 ${W - 6} ${H - 6}`" opacity="0.5" />

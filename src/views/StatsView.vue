@@ -134,9 +134,9 @@ function exportCsv() {
               </button>
             </li>
           </ul>
-          <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-2 overflow-hidden">
             <input v-model="newOpponent" placeholder="Opponent" class="input" />
-            <input v-model="newDate" type="date" class="input" />
+            <input v-model="newDate" type="date" class="input min-w-0" />
             <button class="btn-ghost py-1.5 text-xs" @click="onCreateGame">Start game</button>
           </div>
         </div>
