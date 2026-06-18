@@ -1,9 +1,9 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import PlaysView from '@/views/PlaysView.vue'
 import StatsView from '@/views/StatsView.vue'
 
 export const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes: [
     { path: '/', redirect: '/plays' },
     { path: '/plays', name: 'plays', component: PlaysView },
