@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: theme('colors.ink.900');
+  color: theme('colors.chalk');
+  font-family: theme('fontFamily.body');
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Athletic display lettering for headings / scores */
+.font-stencil {
+  font-family: theme('fontFamily.display');
+  letter-spacing: 0.01em;
+}
+
+/* Hide native number input spinners in the stat sheet */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition
+    focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rim
+    disabled:cursor-not-allowed disabled:opacity-40;
+}
+.btn-primary {
+  @apply btn bg-rim text-ink-900 hover:bg-orange-400;
+}
+.btn-ghost {
+  @apply btn border border-ink-600 bg-ink-800 text-chalk hover:border-ink-500 hover:bg-ink-700;
+}
+.btn-danger {
+  @apply btn border border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20;
+}
+
+.input {
+  @apply w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm text-chalk
+    placeholder:text-ink-500 focus:border-rim focus:outline-none;
+}
+.label {
+  @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-500;
+}
+.card {
+  @apply rounded-xl border border-ink-700 bg-ink-800;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

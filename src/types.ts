@@ -1,0 +1,131 @@
+// ---------- Court drawing model ----------
+// A play diagram is a serializable list of elements drawn on a normalized
+// 0..1 coordinate space, so it renders crisply at any size.
+
+export type CourtType = 'full' | 'half'
+
+export type ElementType = 'pen' | 'arrow' | 'marker'
+
+export interface Point {
+  x: number // 0..1 normalized to court width
+  y: number // 0..1 normalized to court height
+}
+
+export interface BaseElement {
+  id: string
+  type: ElementType
+  color: string
+  width: number
+}
+
+export interface PenElement extends BaseElement {
+  type: 'pen'
+  points: Point[]
+}
+
+export interface ArrowElement extends BaseElement {
+  type: 'arrow'
+  points: Point[] // first = tail, rest = path, last = head
+  style: 'pass' | 'cut' | 'screen' | 'dribble'
+}
+
+export interface MarkerElement extends BaseElement {
+  type: 'marker'
+  at: Point
+  label: string // e.g. "1", "2", "X", "O", "C"
+  team: 'home' | 'away' | 'ball'
+}
+
+export type DiagramElement = PenElement | ArrowElement | MarkerElement
+
+export interface Diagram {
+  courtType: CourtType
+  elements: DiagramElement[]
+}
+
+// ---------- Plays ----------
+export interface PlayVideo {
+  id: string
+  play_id: string
+  storage_path: string
+  url: string | null // resolved public/signed url for playback
+  title: string | null
+  created_at: string
+}
+
+export interface Play {
+  id: string
+  name: string
+  description: string | null
+  category: string | null
+  court_type: CourtType
+  diagram: Diagram
+  created_at: string
+  updated_at: string
+  videos?: PlayVideo[]
+}
+
+export type PlayDraft = Omit<Play, 'id' | 'created_at' | 'updated_at' | 'videos'>
+
+// ---------- Stats ----------
+export interface Player {
+  id: string
+  name: string
+  number: number | null
+  position: string | null
+  active: boolean
+}
+
+export interface Game {
+  id: string
+  opponent: string
+  played_on: string // ISO date
+  location: string | null
+  notes: string | null
+  created_at: string
+}
+
+// Append-only granular events. A box score is derived by aggregating these.
+export type StatType =
+  | 'fg_made'
+  | 'fg_miss'
+  | 'three_made'
+  | 'three_miss'
+  | 'ft_made'
+  | 'ft_miss'
+  | 'rebound_off'
+  | 'rebound_def'
+  | 'assist'
+  | 'steal'
+  | 'block'
+  | 'turnover'
+  | 'foul'
+
+export interface StatEvent {
+  id: string
+  game_id: string
+  player_id: string
+  stat: StatType
+  created_at: string
+}
+
+export interface BoxScoreRow {
+  player_id: string
+  name: string
+  number: number | null
+  pts: number
+  fgm: number
+  fga: number
+  tpm: number
+  tpa: number
+  ftm: number
+  fta: number
+  oreb: number
+  dreb: number
+  reb: number
+  ast: number
+  stl: number
+  blk: number
+  tov: number
+  pf: number
+}
