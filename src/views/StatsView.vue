@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import type { Game, StatType } from '@/types'
-import {
-  useStats,
-  buildBoxScore,
-  boxScoreToCsv,
-  downloadCsv,
-} from '@/composables/useStats'
+import type { Game, Player, StatType } from '@/types'
+import { useStats } from '@/composables/useStats'
+import { buildBoxScore, boxScoreToCsv, downloadCsv } from '@/lib/stats-utils'
 
 const {
   players, games, events, error,
   fetchPlayers, fetchGames, fetchEvents,
-  addPlayer, createGame, recordStat, undoLastFor,
+  addPlayer, updatePlayer, deletePlayer,
+  createGame, deleteGame,
+  recordStat, undoLastFor,
 } = useStats()
 
 const activeGame = ref<Game | null>(null)
@@ -35,9 +33,34 @@ async function onAddPlayer() {
   newPlayerNumber.value = null
 }
 
+const editingPlayerId = ref<string | null>(null)
+const editPlayerName = ref('')
+const editPlayerNumber = ref<number | null>(null)
+
+function startEditPlayer(p: Player) {
+  editingPlayerId.value = p.id
+  editPlayerName.value = p.name
+  editPlayerNumber.value = p.number
+}
+
+async function saveEditPlayer(id: string) {
+  if (!editPlayerName.value.trim()) return
+  await updatePlayer(id, {
+    name: editPlayerName.value.trim(),
+    number: editPlayerNumber.value,
+  })
+  editingPlayerId.value = null
+}
+
+async function onDeletePlayer(id: string) {
+  if (!confirm('Remove this player? Their recorded stats will remain.')) return
+  await deletePlayer(id)
+}
+
 // ----- games -----
 const newOpponent = ref('')
-const newDate = ref(new Date().toISOString().slice(0, 10))
+// Use local date string to avoid UTC-offset yesterday-date bug
+const newDate = ref(new Date().toLocaleDateString('en-CA'))
 async function onCreateGame() {
   if (!newOpponent.value.trim()) return
   const g = await createGame({
@@ -54,6 +77,12 @@ async function onCreateGame() {
 async function openGame(g: Game) {
   activeGame.value = g
   await fetchEvents(g.id)
+}
+
+async function onDeleteGame(id: string) {
+  if (!confirm('Delete this game and all its stat events?')) return
+  await deleteGame(id)
+  if (activeGame.value?.id === id) activeGame.value = null
 }
 
 // ----- live tracking -----
@@ -107,10 +136,34 @@ function exportCsv() {
       <div class="flex flex-col gap-6">
         <div class="card p-4">
           <h2 class="mb-3 font-stencil font-bold">Roster</h2>
-          <ul class="mb-3 max-h-48 space-y-1 overflow-y-auto text-sm">
-            <li v-for="p in players" :key="p.id" class="flex gap-2">
-              <span class="w-7 text-right font-mono text-ink-500">{{ p.number ?? '—' }}</span>
-              <span>{{ p.name }}</span>
+          <ul class="mb-3 max-h-56 space-y-1 overflow-y-auto text-sm">
+            <li v-for="p in players" :key="p.id">
+              <!-- inline edit row -->
+              <template v-if="editingPlayerId === p.id">
+                <div class="flex gap-1">
+                  <input
+                    v-model.number="editPlayerNumber"
+                    type="number"
+                    placeholder="#"
+                    class="input w-12 py-1 text-center text-xs"
+                  />
+                  <input
+                    v-model="editPlayerName"
+                    class="input grow py-1 text-xs"
+                    @keyup.enter="saveEditPlayer(p.id)"
+                  />
+                  <button class="text-xs text-home" @click="saveEditPlayer(p.id)">Save</button>
+                  <button class="text-xs text-ink-500" @click="editingPlayerId = null">✕</button>
+                </div>
+              </template>
+              <template v-else>
+                <div class="flex items-center gap-1">
+                  <span class="w-7 shrink-0 text-right font-mono text-ink-500">{{ p.number ?? '—' }}</span>
+                  <span class="grow">{{ p.name }}</span>
+                  <button class="text-[10px] text-ink-500 hover:text-chalk" @click="startEditPlayer(p)">Edit</button>
+                  <button class="text-[10px] text-red-400 hover:text-red-300" @click="onDeletePlayer(p.id)">Del</button>
+                </div>
+              </template>
             </li>
           </ul>
           <div class="flex gap-2">
@@ -123,15 +176,16 @@ function exportCsv() {
         <div class="card p-4">
           <h2 class="mb-3 font-stencil font-bold">Games</h2>
           <ul class="mb-3 max-h-40 space-y-1 overflow-y-auto text-sm">
-            <li v-for="g in games" :key="g.id">
+            <li v-for="g in games" :key="g.id" class="flex items-center gap-1">
               <button
-                class="w-full rounded px-2 py-1 text-left hover:bg-ink-700"
+                class="grow rounded px-2 py-1 text-left hover:bg-ink-700"
                 :class="activeGame?.id === g.id ? 'bg-ink-700 text-rim' : ''"
                 @click="openGame(g)"
               >
                 vs {{ g.opponent }}
                 <span class="text-ink-500">· {{ g.played_on }}</span>
               </button>
+              <button class="shrink-0 text-[10px] text-red-400 hover:text-red-300" @click="onDeleteGame(g.id)">Del</button>
             </li>
           </ul>
           <div class="flex flex-col gap-2 overflow-hidden">

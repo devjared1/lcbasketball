@@ -11,11 +11,18 @@ const title = ref('')
 const busy = ref(false)
 const localError = ref<string | null>(null)
 
+const MAX_FILE_BYTES = 50 * 1024 * 1024 // 50 MB
+
 async function onPick(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
   if (!file.type.startsWith('video/')) {
     localError.value = 'Pick a video file (mp4, mov, webm).'
+    return
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    localError.value = `File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is 50 MB.`
+    if (fileInput.value) fileInput.value.value = ''
     return
   }
   busy.value = true

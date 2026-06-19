@@ -1,14 +1,25 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import type { Play, PlayDraft } from '@/types'
 import { usePlays } from '@/composables/usePlays'
 import CourtCanvas from '@/components/CourtCanvas.vue'
 import PlayEditorModal from '@/components/PlayEditorModal.vue'
 
-const { plays, loading, error, fetchPlays, createPlay, updatePlay, deletePlay } = usePlays()
+const { plays, loading, error, fetchPlays, createPlay, updatePlay, deletePlay, duplicatePlay } = usePlays()
 
 const editorOpen = ref(false)
 const editing = ref<Play | null>(null)
+const search = ref('')
+
+const filteredPlays = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  if (!q) return plays.value
+  return plays.value.filter(
+    (p) =>
+      p.name.toLowerCase().includes(q) ||
+      (p.category ?? '').toLowerCase().includes(q),
+  )
+})
 
 onMounted(fetchPlays)
 
@@ -36,6 +47,14 @@ async function onDelete(p: Play) {
   if (!confirm(`Delete "${p.name}"? This also removes its clips.`)) return
   await deletePlay(p.id)
 }
+
+async function onDuplicate(p: Play) {
+  const copy = await duplicatePlay(p)
+  if (copy) {
+    editing.value = copy
+    editorOpen.value = true
+  }
+}
 </script>
 
 <template>
@@ -48,6 +67,14 @@ async function onDelete(p: Play) {
       <button class="btn-primary" @click="openNew">+ New play</button>
     </header>
 
+    <div class="mb-4">
+      <input
+        v-model="search"
+        class="input"
+        placeholder="Search by name or category…"
+      />
+    </div>
+
     <p v-if="error" class="mb-4 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
       {{ error }}
     </p>
@@ -58,8 +85,12 @@ async function onDelete(p: Play) {
       <button class="btn-primary" @click="openNew">Diagram your first play</button>
     </div>
 
+    <p v-else-if="!loading && plays.length && !filteredPlays.length" class="text-sm text-ink-500">
+      No plays match "{{ search }}".
+    </p>
+
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <article v-for="p in plays" :key="p.id" class="card overflow-hidden">
+      <article v-for="p in filteredPlays" :key="p.id" class="card overflow-hidden">
         <div class="pointer-events-none bg-court-wood">
           <CourtCanvas :model-value="p.diagram" />
         </div>
@@ -74,6 +105,7 @@ async function onDelete(p: Play) {
           <p v-if="p.description" class="mt-1 line-clamp-2 text-sm text-ink-500">{{ p.description }}</p>
           <div class="mt-3 flex gap-2">
             <button class="btn-ghost grow py-1.5 text-xs" @click="openEdit(p)">Open</button>
+            <button class="btn-ghost py-1.5 text-xs" title="Duplicate" @click="onDuplicate(p)">Copy</button>
             <button class="btn-danger py-1.5 text-xs" @click="onDelete(p)">Delete</button>
           </div>
         </div>

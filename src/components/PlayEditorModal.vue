@@ -49,61 +49,68 @@ watch(
   },
 )
 
-async function save() {
+// Reset saving once the parent confirms the play was persisted (id or updated_at changed)
+watch(
+  () => [props.play?.id, props.play?.updated_at],
+  () => { saving.value = false },
+)
+
+function save() {
   if (!form.name.trim()) return
   saving.value = true
   emit('save', { ...form })
-  saving.value = false
 }
 </script>
 
 <template>
-  <div
-    class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/70 p-4"
-    @click.self="emit('close')"
-  >
-    <div class="card my-6 w-full max-w-4xl p-5">
-      <div class="mb-4 flex items-center justify-between">
-        <h2 class="font-stencil text-xl font-bold">
-          {{ play ? 'Edit play' : 'New play' }}
-        </h2>
-        <button class="text-ink-500 hover:text-chalk" @click="emit('close')">✕</button>
-      </div>
+  <Teleport to="body">
+    <div
+      class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/70 p-4"
+      @click.self="emit('close')"
+    >
+      <div class="card my-6 w-full max-w-4xl p-5">
+        <div class="mb-4 flex items-center justify-between">
+          <h2 class="font-stencil text-xl font-bold">
+            {{ play ? 'Edit play' : 'New play' }}
+          </h2>
+          <button class="text-ink-500 hover:text-chalk" @click="emit('close')">✕</button>
+        </div>
 
-      <div class="grid gap-4 md:grid-cols-[1fr_auto]">
-        <div class="flex flex-col gap-3">
-          <div>
-            <label class="label" for="play-name">Name</label>
-            <input id="play-name" v-model="form.name" class="input" placeholder="Horns flare" />
+        <div class="grid gap-4 md:grid-cols-[1fr_auto]">
+          <div class="flex flex-col gap-3">
+            <div>
+              <label class="label" for="play-name">Name</label>
+              <input id="play-name" v-model="form.name" class="input" placeholder="Horns flare" />
+            </div>
+            <div>
+              <label class="label" for="play-cat">Category</label>
+              <input id="play-cat" v-model="form.category" class="input" placeholder="Half-court set / BLOB / Press break" />
+            </div>
           </div>
-          <div>
-            <label class="label" for="play-cat">Category</label>
-            <input id="play-cat" v-model="form.category" class="input" placeholder="Half-court set / BLOB / Press break" />
+          <div class="md:w-64">
+            <label class="label" for="play-desc">Notes</label>
+            <textarea id="play-desc" v-model="form.description" rows="3" class="input" placeholder="When to call it, reads, counters…" />
           </div>
         </div>
-        <div class="md:w-64">
-          <label class="label" for="play-desc">Notes</label>
-          <textarea id="play-desc" v-model="form.description" rows="3" class="input" placeholder="When to call it, reads, counters…" />
+
+        <div class="mt-4">
+          <label class="label">Diagram</label>
+          <CourtCanvas v-model="form.diagram" editable />
         </div>
-      </div>
 
-      <div class="mt-4">
-        <label class="label">Diagram</label>
-        <CourtCanvas v-model="form.diagram" editable />
-      </div>
+        <div v-if="play" class="mt-5 border-t border-ink-700 pt-4">
+          <label class="label">Video examples</label>
+          <VideoUploader :play="play" />
+        </div>
+        <p v-else class="mt-4 text-xs text-ink-500">Save the play first to attach video clips.</p>
 
-      <div v-if="play" class="mt-5 border-t border-ink-700 pt-4">
-        <label class="label">Video examples</label>
-        <VideoUploader :play="play" />
-      </div>
-      <p v-else class="mt-4 text-xs text-ink-500">Save the play first to attach video clips.</p>
-
-      <div class="mt-5 flex justify-end gap-2">
-        <button class="btn-ghost" @click="emit('close')">Cancel</button>
-        <button class="btn-primary" :disabled="!form.name.trim() || saving" @click="save">
-          {{ play ? 'Save changes' : 'Create play' }}
-        </button>
+        <div class="mt-5 flex justify-end gap-2">
+          <button class="btn-ghost" @click="emit('close')">Cancel</button>
+          <button class="btn-primary" :disabled="!form.name.trim() || saving" @click="save">
+            {{ saving ? 'Saving…' : play ? 'Save changes' : 'Create play' }}
+          </button>
+        </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>

@@ -2,6 +2,8 @@ import { ref } from 'vue'
 import { supabase, VIDEO_BUCKET, isSupabaseConfigured } from '@/lib/supabase'
 import type { Play, PlayDraft, PlayVideo } from '@/types'
 
+// Module-level singletons — state is shared across all component instances.
+// Intentional for a single-coach app; revisit if multi-user context is ever needed.
 const plays = ref<Play[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -86,6 +88,17 @@ export function usePlays() {
     return true
   }
 
+  async function duplicatePlay(original: Play): Promise<Play | null> {
+    const draft: PlayDraft = {
+      name: `${original.name} (copy)`,
+      description: original.description ?? '',
+      category: original.category ?? '',
+      court_type: original.court_type,
+      diagram: JSON.parse(JSON.stringify(original.diagram)),
+    }
+    return createPlay(draft)
+  }
+
   // Uploads a clip to Storage, records it in play_videos, returns the row.
   async function uploadVideo(
     playId: string,
@@ -139,6 +152,7 @@ export function usePlays() {
     createPlay,
     updatePlay,
     deletePlay,
+    duplicatePlay,
     uploadVideo,
     deleteVideo,
   }

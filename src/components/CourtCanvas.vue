@@ -21,6 +21,20 @@ const arrowStyle = ref<ArrowElement['style']>('pass')
 const markerTeam = ref<MarkerElement['team']>('home')
 const markerLabel = ref('1')
 
+// Court geometry constants (10 SVG units = 1 foot, NFHS high school dimensions)
+const BOUNDARY = 6           // boundary line inset from SVG edge
+const BASKET_INSET = 56      // basket center from baseline (5.6 ft)
+const KEY_HALF_W = 80        // half-width of key paint (8 ft)
+const KEY_LENGTH = 190       // key length from baseline to free-throw line (19 ft)
+const LANE_ARC_R = 60        // free-throw circle radius (6 ft)
+const THREE_R = 237          // 3-point arc radius (23.75 ft — NFHS)
+const THREE_CORNER_X = 36    // corner 3-pt line distance from near sideline boundary (3 ft from sideline)
+// Arc meets corner at sqrt(THREE_R² − (basket_center_x − THREE_CORNER_X)²) + BASKET_INSET
+// Half court: basket at x=250; offset = 250−36 = 214; y = sqrt(237²−214²) + 56 ≈ 158
+const THREE_ARC_Y_HALF = 159 // y where corner line meets arc on half court
+// Full court: basket at x=56; horizontal offset to corner = H/2 − 214 (where H/2=250); arc_x = sqrt(237²−214²)+56 ≈ 158
+const THREE_ARC_X_FULL = 158 // x where corner line meets arc on full court
+
 // Court geometry in SVG user units (10 units == 1 foot).
 const dims = computed(() =>
   props.modelValue.courtType === 'full'
@@ -39,7 +53,12 @@ function commit(next: DiagramElement[]) {
 }
 
 function setCourt(type: CourtType) {
-  emit('update:modelValue', { ...props.modelValue, courtType: type })
+  if (props.modelValue.courtType === type) return
+  if (
+    elements.value.length > 0 &&
+    !confirm('Switching court type will clear all diagram elements. Continue?')
+  ) return
+  emit('update:modelValue', { courtType: type, elements: [] })
 }
 
 function toNorm(e: PointerEvent): Point {
@@ -136,6 +155,53 @@ function undo() {
   commit(elements.value.slice(0, -1))
 }
 
+// ---------- Quick-start formation templates ----------
+type TemplateName = '5out' | 'horns' | '4low'
+
+const TEMPLATES: Record<TemplateName, { x: number; y: number; label: string }[]> = {
+  // Five players spread behind the 3-point arc, one on each spot
+  '5out': [
+    { x: 0.50, y: 0.72, label: '1' },
+    { x: 0.22, y: 0.60, label: '2' },
+    { x: 0.78, y: 0.60, label: '3' },
+    { x: 0.10, y: 0.36, label: '4' },
+    { x: 0.90, y: 0.36, label: '5' },
+  ],
+  // Guard at top, two bigs at elbows, two wings on the wings
+  horns: [
+    { x: 0.50, y: 0.72, label: '1' },
+    { x: 0.33, y: 0.47, label: '2' },
+    { x: 0.67, y: 0.47, label: '3' },
+    { x: 0.18, y: 0.64, label: '4' },
+    { x: 0.82, y: 0.64, label: '5' },
+  ],
+  // Guard at top, two players at elbows, two on the low blocks
+  '4low': [
+    { x: 0.50, y: 0.78, label: '1' },
+    { x: 0.36, y: 0.47, label: '2' },
+    { x: 0.64, y: 0.47, label: '3' },
+    { x: 0.38, y: 0.28, label: '4' },
+    { x: 0.62, y: 0.28, label: '5' },
+  ],
+}
+
+function applyTemplate(name: TemplateName) {
+  if (
+    elements.value.length > 0 &&
+    !confirm('This will replace existing diagram elements. Continue?')
+  ) return
+  const newElements: MarkerElement[] = TEMPLATES[name].map((pos) => ({
+    id: crypto.randomUUID(),
+    type: 'marker' as const,
+    color: '#37b6c4',
+    width: 3,
+    at: { x: pos.x, y: pos.y },
+    label: pos.label,
+    team: 'home' as const,
+  }))
+  commit(newElements)
+}
+
 // ---------- rendering helpers ----------
 const W = computed(() => dims.value.w)
 const H = computed(() => dims.value.h)
@@ -198,12 +264,6 @@ const allElements = computed<DiagramElement[]>(() =>
 )
 
 const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
-
-// rebuild a default diagram when court toggled with no elements
-watch(
-  () => props.modelValue.courtType,
-  () => {},
-)
 </script>
 
 <template>
@@ -253,6 +313,17 @@ watch(
       </label>
 
       <div class="ml-auto flex gap-2">
+        <!-- Quick-start formation templates (half court only) -->
+        <select
+          v-if="modelValue.courtType === 'half'"
+          class="input w-auto py-1.5 text-xs"
+          @change="(e) => { applyTemplate((e.target as HTMLSelectElement).value as TemplateName); (e.target as HTMLSelectElement).value = '' }"
+        >
+          <option value="">Templates…</option>
+          <option value="5out">5-Out</option>
+          <option value="horns">Horns</option>
+          <option value="4low">4-Low</option>
+        </select>
         <button class="btn-ghost py-1.5 text-xs" @click="undo">Undo</button>
         <button class="btn-ghost py-1.5 text-xs" @click="clearAll">Clear</button>
         <div class="flex overflow-hidden rounded-md border border-ink-600">
@@ -283,43 +354,42 @@ watch(
       >
         <!-- court markings (10 units == 1 ft) -->
         <g fill="none" stroke="#1c1614" stroke-width="3" opacity="0.85">
-          <rect :x="6" :y="6" :width="W - 12" :height="H - 12" />
+          <rect :x="BOUNDARY" :y="BOUNDARY" :width="W - BOUNDARY * 2" :height="H - BOUNDARY * 2" />
 
           <!-- FULL COURT -->
           <template v-if="modelValue.courtType === 'full'">
-            <line :x1="W / 2" :y1="6" :x2="W / 2" :y2="H - 6" />
-            <circle :cx="W / 2" :cy="H / 2" :r="60" />
+            <line :x1="W / 2" :y1="BOUNDARY" :x2="W / 2" :y2="H - BOUNDARY" />
+            <circle :cx="W / 2" :cy="H / 2" :r="LANE_ARC_R" />
             <!-- left key + arc -->
-            <rect :x="6" :y="H / 2 - 80" :width="190" :height="160" />
-            <circle :cx="196" :cy="H / 2" :r="60" />
-            <!-- left 3-point: straight corner lines + arc centred on basket (56, H/2) r=237 -->
-            <line :x1="6" :y1="H / 2 - 214" :x2="158" :y2="H / 2 - 214" />
-            <line :x1="6" :y1="H / 2 + 214" :x2="158" :y2="H / 2 + 214" />
-            <path :d="`M 158 ${H / 2 - 214} A 237 237 0 0 1 158 ${H / 2 + 214}`" />
-            <circle :cx="56" :cy="H / 2" r="9" />
-            <line :x1="40" :y1="H / 2 - 30" :x2="40" :y2="H / 2 + 30" />
+            <rect :x="BOUNDARY" :y="H / 2 - KEY_HALF_W" :width="KEY_LENGTH + BASKET_INSET - BOUNDARY" :height="KEY_HALF_W * 2" />
+            <circle :cx="KEY_LENGTH + BASKET_INSET - BOUNDARY" :cy="H / 2" :r="LANE_ARC_R" />
+            <!-- left 3-point: straight corner lines + arc centred on basket (BASKET_INSET, H/2) r=THREE_R -->
+            <line :x1="BOUNDARY" :y1="H / 2 - (H / 2 - THREE_CORNER_X)" :x2="THREE_ARC_X_FULL" :y2="H / 2 - (H / 2 - THREE_CORNER_X)" />
+            <line :x1="BOUNDARY" :y1="H / 2 + (H / 2 - THREE_CORNER_X)" :x2="THREE_ARC_X_FULL" :y2="H / 2 + (H / 2 - THREE_CORNER_X)" />
+            <path :d="`M ${THREE_ARC_X_FULL} ${H / 2 - (H / 2 - THREE_CORNER_X)} A ${THREE_R} ${THREE_R} 0 0 1 ${THREE_ARC_X_FULL} ${H / 2 + (H / 2 - THREE_CORNER_X)}`" />
+            <circle :cx="BASKET_INSET" :cy="H / 2" r="9" />
+            <line :x1="BASKET_INSET - 16" :y1="H / 2 - 30" :x2="BASKET_INSET - 16" :y2="H / 2 + 30" />
             <!-- right key + arc -->
-            <rect :x="W - 196" :y="H / 2 - 80" :width="190" :height="160" />
-            <circle :cx="W - 196" :cy="H / 2" :r="60" />
-            <!-- right 3-point: straight corner lines + arc centred on basket (W-56, H/2) r=237 -->
-            <line :x1="W - 6" :y1="H / 2 - 214" :x2="W - 158" :y2="H / 2 - 214" />
-            <line :x1="W - 6" :y1="H / 2 + 214" :x2="W - 158" :y2="H / 2 + 214" />
-            <path :d="`M ${W - 158} ${H / 2 - 214} A 237 237 0 0 0 ${W - 158} ${H / 2 + 214}`" />
-            <circle :cx="W - 56" :cy="H / 2" r="9" />
-            <line :x1="W - 40" :y1="H / 2 - 30" :x2="W - 40" :y2="H / 2 + 30" />
+            <rect :x="W - KEY_LENGTH - BASKET_INSET + BOUNDARY" :y="H / 2 - KEY_HALF_W" :width="KEY_LENGTH + BASKET_INSET - BOUNDARY" :height="KEY_HALF_W * 2" />
+            <circle :cx="W - KEY_LENGTH - BASKET_INSET + BOUNDARY" :cy="H / 2" :r="LANE_ARC_R" />
+            <!-- right 3-point: straight corner lines + arc centred on basket (W-BASKET_INSET, H/2) r=THREE_R -->
+            <line :x1="W - BOUNDARY" :y1="H / 2 - (H / 2 - THREE_CORNER_X)" :x2="W - THREE_ARC_X_FULL" :y2="H / 2 - (H / 2 - THREE_CORNER_X)" />
+            <line :x1="W - BOUNDARY" :y1="H / 2 + (H / 2 - THREE_CORNER_X)" :x2="W - THREE_ARC_X_FULL" :y2="H / 2 + (H / 2 - THREE_CORNER_X)" />
+            <path :d="`M ${W - THREE_ARC_X_FULL} ${H / 2 - (H / 2 - THREE_CORNER_X)} A ${THREE_R} ${THREE_R} 0 0 0 ${W - THREE_ARC_X_FULL} ${H / 2 + (H / 2 - THREE_CORNER_X)}`" />
+            <circle :cx="W - BASKET_INSET" :cy="H / 2" r="9" />
+            <line :x1="W - BASKET_INSET + 16" :y1="H / 2 - 30" :x2="W - BASKET_INSET + 16" :y2="H / 2 + 30" />
           </template>
 
           <!-- HALF COURT (offensive half, hoop at top) -->
           <template v-else>
-            <rect :x="W / 2 - 80" :y="6" :width="160" :height="190" />
-            <circle :cx="W / 2" :cy="196" :r="60" />
-            <!-- 3-point: straight corner lines (3 ft from each sideline) + arc centred on basket (W/2, 56) r=237 -->
-            <line :x1="36" :y1="6" :x2="36" :y2="160" />
-            <line :x1="W - 36" :y1="6" :x2="W - 36" :y2="160" />
-            <path :d="`M 36 159 A 237 237 0 0 0 ${W - 36} 159`" />
-            <circle :cx="W / 2" :cy="56" r="9" />
-            <line :x1="W / 2 - 30" :y1="40" :x2="W / 2 + 30" :y2="40" />
-            <!-- <path :d="`M 6 ${H - 6} A ${W / 2 - 6} ${W / 2 - 6} 0 0 0 ${W - 6} ${H - 6}`" opacity="0.5" /> -->
+            <rect :x="W / 2 - KEY_HALF_W" :y="BOUNDARY" :width="KEY_HALF_W * 2" :height="KEY_LENGTH + BASKET_INSET - BOUNDARY" />
+            <circle :cx="W / 2" :cy="KEY_LENGTH + BASKET_INSET - BOUNDARY" :r="LANE_ARC_R" />
+            <!-- 3-point: straight corner lines (3 ft from each sideline) + arc centred on basket (W/2, BASKET_INSET) r=THREE_R -->
+            <line :x1="THREE_CORNER_X" :y1="BOUNDARY" :x2="THREE_CORNER_X" :y2="THREE_ARC_Y_HALF" />
+            <line :x1="W - THREE_CORNER_X" :y1="BOUNDARY" :x2="W - THREE_CORNER_X" :y2="THREE_ARC_Y_HALF" />
+            <path :d="`M ${THREE_CORNER_X} ${THREE_ARC_Y_HALF} A ${THREE_R} ${THREE_R} 0 0 0 ${W - THREE_CORNER_X} ${THREE_ARC_Y_HALF}`" />
+            <circle :cx="W / 2" :cy="BASKET_INSET" r="9" />
+            <line :x1="W / 2 - 30" :y1="BASKET_INSET - 16" :x2="W / 2 + 30" :y2="BASKET_INSET - 16" />
           </template>
         </g>
 
@@ -388,7 +458,7 @@ watch(
               dominant-baseline="central"
               font-size="18"
               font-weight="700"
-              font-family="Archivo, sans-serif"
+              font-family="Inter, system-ui, sans-serif"
               fill="#0d0f13"
             >
               {{ el.label }}
