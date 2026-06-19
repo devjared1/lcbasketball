@@ -1,31 +1,44 @@
 <script setup lang="ts">
+import { useRoute } from 'vue-router'
+import { BookOpenIcon, ChartBarIcon } from '@heroicons/vue/24/outline'
+import { BookOpenIcon as BookOpenSolid, ChartBarIcon as ChartBarSolid } from '@heroicons/vue/24/solid'
 import { isSupabaseConfigured } from '@/lib/supabase'
+
+const route = useRoute()
+
+const tabs = [
+  { to: '/plays', label: 'Plays', outline: BookOpenIcon, solid: BookOpenSolid },
+  { to: '/stats', label: 'Stats', outline: ChartBarIcon, solid: ChartBarSolid },
+]
 </script>
 
 <template>
-  <header class="sticky top-0 z-30 border-b border-ink-700 bg-ink-900/90 backdrop-blur">
-    <div class="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
-      <RouterLink to="/plays" class="flex items-center gap-2">
-        <span class="grid h-8 w-8 place-items-center rounded-full bg-rim font-stencil text-lg font-extrabold text-ink-900">P</span>
-        <span class="font-stencil text-lg font-extrabold tracking-tight">PLAYBOOK</span>
-      </RouterLink>
-      <nav class="flex gap-1 text-sm font-semibold">
-        <RouterLink
-          to="/plays"
-          class="rounded-md px-3 py-1.5 text-ink-500 hover:text-chalk"
-          active-class="bg-ink-700 !text-chalk"
-        >Plays</RouterLink>
-        <RouterLink
-          to="/stats"
-          class="rounded-md px-3 py-1.5 text-ink-500 hover:text-chalk"
-          active-class="bg-ink-700 !text-chalk"
-        >Stats</RouterLink>
-      </nav>
-      <span
-        v-if="!isSupabaseConfigured"
-        class="ml-auto rounded-md border border-rim/40 bg-rim/10 px-2 py-1 text-xs text-rim"
-        title="Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local"
-      >Supabase not configured</span>
+  <nav
+    class="fixed inset-x-0 bottom-0 z-30 border-t border-ink-700/60 bg-ink-900/95 backdrop-blur-xl"
+    style="padding-bottom: env(safe-area-inset-bottom, 0px)"
+  >
+    <div
+      v-if="!isSupabaseConfigured"
+      class="border-b border-rim/20 bg-rim/10 px-4 py-1 text-center text-xs text-rim"
+      title="Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local"
+    >
+      Supabase not configured
     </div>
-  </header>
+
+    <div class="mx-auto flex max-w-6xl">
+      <RouterLink
+        v-for="tab in tabs"
+        :key="tab.to"
+        :to="tab.to"
+        class="flex flex-1 flex-col items-center gap-0.5 py-2.5 text-ink-500 transition-colors"
+        active-class="!text-rim"
+      >
+        <component
+          :is="route.path.startsWith(tab.to) ? tab.solid : tab.outline"
+          class="h-6 w-6"
+        />
+        <span class="text-[10px] font-semibold uppercase tracking-wider">{{ tab.label }}</span>
+      </RouterLink>
+    </div>
+  </nav>
 </template>

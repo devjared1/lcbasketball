@@ -34,29 +34,29 @@ input[type='number']::-webkit-inner-spin-button {
 }
 
 .btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition
     focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rim
     disabled:cursor-not-allowed disabled:opacity-40;
 }
 .btn-primary {
-  @apply btn bg-rim text-ink-900 hover:bg-orange-400;
+  @apply btn bg-rim text-white hover:brightness-110;
 }
 .btn-ghost {
   @apply btn border border-ink-600 bg-ink-800 text-chalk hover:border-ink-500 hover:bg-ink-700;
 }
 .btn-danger {
-  @apply btn border border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20;
+  @apply btn border border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20;
 }
 
 .input {
-  @apply w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm text-chalk
+  @apply w-full rounded-xl border border-ink-600 bg-ink-800 px-3 py-2.5 text-sm text-chalk
     placeholder:text-ink-500 focus:border-rim focus:outline-none;
 }
 .label {
-  @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-500;
+  @apply mb-1.5 block text-xs font-semibold uppercase tracking-widest text-ink-500;
 }
 .card {
-  @apply rounded-xl border border-ink-700 bg-ink-800;
+  @apply rounded-2xl border border-ink-700/60 bg-ink-800;
 }
 
 @media (prefers-reduced-motion: reduce) {
