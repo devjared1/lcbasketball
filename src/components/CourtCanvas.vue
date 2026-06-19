@@ -15,7 +15,7 @@ const emit = defineEmits<{ 'update:modelValue': [Diagram] }>()
 
 type Tool = 'pen' | 'arrow' | 'marker' | 'erase'
 const tool = ref<Tool>('pen')
-const color = ref('#eef2f6')
+const color = ref('#000000')
 const strokeWidth = ref(3)
 const arrowStyle = ref<ArrowElement['style']>('pass')
 const markerTeam = ref<MarkerElement['team']>('home')
@@ -314,12 +314,12 @@ watch(
             <rect :x="W / 2 - 80" :y="6" :width="160" :height="190" />
             <circle :cx="W / 2" :cy="196" :r="60" />
             <!-- 3-point: straight corner lines (3 ft from each sideline) + arc centred on basket (W/2, 56) r=237 -->
-            <line :x1="36" :y1="6" :x2="36" :y2="158" />
-            <line :x1="W - 36" :y1="6" :x2="W - 36" :y2="158" />
-            <path :d="`M 36 158 A 237 237 0 1 1 ${W - 36} 158`" />
+            <line :x1="36" :y1="6" :x2="36" :y2="160" />
+            <line :x1="W - 36" :y1="6" :x2="W - 36" :y2="160" />
+            <path :d="`M 36 159 A 237 237 0 0 0 ${W - 36} 159`" />
             <circle :cx="W / 2" :cy="56" r="9" />
             <line :x1="W / 2 - 30" :y1="40" :x2="W / 2 + 30" :y2="40" />
-            <path :d="`M 6 ${H - 6} A ${W / 2 - 6} ${W / 2 - 6} 0 0 0 ${W - 6} ${H - 6}`" opacity="0.5" />
+            <!-- <path :d="`M 6 ${H - 6} A ${W / 2 - 6} ${W / 2 - 6} 0 0 0 ${W - 6} ${H - 6}`" opacity="0.5" /> -->
           </template>
         </g>
 
