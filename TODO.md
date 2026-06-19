@@ -5,23 +5,58 @@
 - [ ] Multi phase plays
   - Sometimes plays have several different actions. Need to be able to create and display multiple phases
 - [ ] Ability to curve all cut lines
+- [ ] Duplicate a play (copy an existing play as a starting point)
+- [ ] Search / filter plays by category or name
+- [ ] Export a play as a PNG or PDF (screenshot the SVG canvas)
+- [ ] Print-friendly play sheet (one play per page, diagram + notes)
+- [ ] Drag-to-reorder plays in the grid
+- [ ] Quick-start marker templates (e.g. 5-out, 4-low, horns) to pre-place players
+- [ ] Link player markers in a diagram to actual roster players by name
+- [ ] Opponent scouting section — separate from team playbook, tag plays as "opponent tendency"
+- [ ] Practice plan builder — drag plays into an ordered session with time slots
+- [ ] Shot chart — tap a court location during a game to log shot attempts with make/miss
+- [ ] Quarter / period tracking — split stat events by quarter so box score can show per-quarter splits
+- [ ] Substitution log — track which players were on the floor each possession
+- [ ] Season stats view — aggregate box scores across all games into season averages and totals
+- [ ] PWA / offline support — service worker so the app loads and is usable without a network connection
+- [ ] Play animation mode — step through multi-phase plays with transitions on the diagram
 
 ---
 
 # Bugs
 
+- [ ] Switching court type (half ↔ full) does not reposition existing diagram elements — markers drawn on a half court will appear in the wrong spot if you switch to full court mid-draw
+- [ ] `newDate` in StatsView initializes from `new Date().toISOString()` which is UTC — coaches in US evening sessions will see yesterday's date
+- [ ] `fetchGames` in `useStats` does not guard against Supabase being unconfigured the way `fetchPlayers` does — will throw a cryptic network error instead of the friendly banner
+- [ ] No client-side file-size check before video upload — very large files queue silently and may fail at the Storage level with no actionable message shown to the user
+- [ ] The empty `watch(() => props.modelValue.courtType, () => {})` in `CourtCanvas.vue` is dead code and should be removed
+- [ ] Saving a play does not disable the Save button during the async call — rapid double-taps can create duplicate records
+
 ---
 
 # Refactor
+
+- [ ] Extract court geometry constants (basket position, 3-point radius, key dimensions) from the SVG template into named constants so the magic numbers are documented in one place
+- [ ] Move `buildBoxScore`, `boxScoreToCsv`, and `downloadCsv` out of `useStats.ts` into a `src/lib/stats-utils.ts` — they are pure functions with no Supabase dependency and are easier to unit-test standalone
+- [ ] `usePlays` and `useStats` use module-level refs (singleton state) — this is fine for a single-coach app but should be called out explicitly in comments so it's not surprising if the app ever supports multiple active contexts
+- [ ] The `PlayEditorModal` `save()` handler emits synchronously and doesn't await the Supabase call — the parent `onSave` is async but the modal doesn't track the result; consider passing a loading state back down or lifting error handling into the modal
+- [ ] Wrap the modal `<div>` in `<Teleport to="body">` to avoid potential z-index stacking context issues when the modal is nested inside a transformed or overflow-hidden ancestor
 
 ---
 
 # UI Design System
 
 - [ ] UI / UX should feel like a modern iPhone / iPad app
-– [ ] Color palette: Draw from Lawrence County High School in Moulton, AL. Some variation of red, black, grey and white
+- [ ] Color palette: Draw from Lawrence County High School in Moulton, AL. Some variation of red, black, grey and white
 - [ ] Icons: Find free library online or importable package. should have the native iPhone / ipad look 
-- [ ] Font: use best judgement 
+  - Suggestion: **Heroicons** (free, MIT licensed, designed by the Tailwind CSS team — matches iOS visual weight well; `npm install @heroicons/vue`)
+  - Alternative: **Lucide** (`npm install lucide-vue-next`) — thinner strokes, very modern
+- [ ] Font: use best judgement
+  - Suggestion: **Inter** (already loaded) for body text — it is the closest free match to SF Pro
+  - Swap the stencil/display font from Archivo to **Barlow Condensed** or **Oswald** for a more athletic, scoreboard feel that suits the school branding
+- [ ] Swap current orange `rim` accent to **red** to match Lawrence County's school colors; update `tailwind.config.js` color tokens (`rim`, `home`, `btn-primary`)
+- [ ] Replace dark `ink-900` background with true black (`#000`) to match iOS dark mode aesthetic on OLED screens
+- [ ] Add a bottom tab bar navigation (Plays / Stats) in place of the current top nav — standard iOS navigation pattern on mobile
 
 
 ---
