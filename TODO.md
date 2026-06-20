@@ -3,7 +3,7 @@
 1. - [x] Edit/Delete players
 2. - [x] Edit/Delete games
 3. - [ ] Multi phase plays. Sometimes plays have several different actions. Need to be able to create and display multiple phases
-4. - [ ] Ability to curve all cut lines
+4. - [x] Ability to curve all cut lines
 5. - [x] Duplicate a play (copy an existing play as a starting point)
 6. - [x] Search / filter plays by category or name
 7. - [ ] Export a play as a PNG or PDF (screenshot the SVG canvas)
@@ -19,8 +19,8 @@
 17. - [ ] Season stats view — aggregate box scores across all games into season averages and totals
 18. - [ ] PWA / offline support — service worker so the app loads and is usable without a network connection
 19. - [ ] Play animation mode — step through multi-phase plays with transitions on the diagram
-20. - [ ] Click/Touch drag to move markers on court
-21. - [ ] Click/Touch edit an existing cut line on court (extend/shorten, change direction) 
+20. - [x] Click/Touch drag to move markers on court
+21. - [x] Click/Touch edit an existing cut line on court (extend/shorten, change direction)
 
 ---
 

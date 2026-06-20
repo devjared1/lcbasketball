@@ -25,8 +25,9 @@ export interface PenElement extends BaseElement {
 
 export interface ArrowElement extends BaseElement {
   type: 'arrow'
-  points: Point[] // first = tail, rest = path, last = head
+  points: Point[] // first = tail, last = head
   style: 'pass' | 'cut' | 'screen' | 'dribble'
+  control?: Point // quadratic bezier control point; absent = straight line
 }
 
 export interface MarkerElement extends BaseElement {

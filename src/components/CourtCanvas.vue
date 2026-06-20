@@ -13,39 +13,54 @@ import type {
 const props = defineProps<{ modelValue: Diagram; editable?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [Diagram] }>()
 
-type Tool = 'pen' | 'arrow' | 'marker' | 'erase'
-const tool = ref<Tool>('pen')
+type Tool = 'select' | 'pen' | 'arrow' | 'marker' | 'erase'
+const tool = ref<Tool>('select')
 const color = ref('#000000')
 const strokeWidth = ref(3)
-const arrowStyle = ref<ArrowElement['style']>('pass')
+const arrowStyle = ref<ArrowElement['style']>('cut')
 const markerTeam = ref<MarkerElement['team']>('home')
 const markerLabel = ref('1')
 
 // Court geometry constants (10 SVG units = 1 foot, NFHS high school dimensions)
-const BOUNDARY = 6           // boundary line inset from SVG edge
-const BASKET_INSET = 56      // basket center from baseline (5.6 ft)
-const KEY_HALF_W = 80        // half-width of key paint (8 ft)
-const KEY_LENGTH = 190       // key length from baseline to free-throw line (19 ft)
-const LANE_ARC_R = 60        // free-throw circle radius (6 ft)
-const THREE_R = 237          // 3-point arc radius (23.75 ft — NFHS)
-const THREE_CORNER_X = 36    // corner 3-pt line distance from near sideline boundary (3 ft from sideline)
-// Arc meets corner at sqrt(THREE_R² − (basket_center_x − THREE_CORNER_X)²) + BASKET_INSET
-// Half court: basket at x=250; offset = 250−36 = 214; y = sqrt(237²−214²) + 56 ≈ 158
-const THREE_ARC_Y_HALF = 159 // y where corner line meets arc on half court
-// Full court: basket at x=56; horizontal offset to corner = H/2 − 214 (where H/2=250); arc_x = sqrt(237²−214²)+56 ≈ 158
-const THREE_ARC_X_FULL = 158 // x where corner line meets arc on full court
+const BOUNDARY = 6
+const BASKET_INSET = 56
+const KEY_HALF_W = 80
+const KEY_LENGTH = 190
+const LANE_ARC_R = 60
+const THREE_R = 237
+const THREE_CORNER_X = 36
+const THREE_ARC_Y_HALF = 159
+const THREE_ARC_X_FULL = 158
 
-// Court geometry in SVG user units (10 units == 1 foot).
 const dims = computed(() =>
   props.modelValue.courtType === 'full'
     ? { w: 940, h: 500 }
     : { w: 500, h: 470 },
 )
 const viewBox = computed(() => `0 0 ${dims.value.w} ${dims.value.h}`)
+const W = computed(() => dims.value.w)
+const H = computed(() => dims.value.h)
 
 const svgRef = ref<SVGSVGElement | null>(null)
+
+// ---------- draw state (pen / arrow tools) ----------
 const drawing = ref<DiagramElement | null>(null)
 
+// ---------- select/drag state ----------
+const selectedId = ref<string | null>(null)
+
+type DragKind = 'marker' | 'arrow-tail' | 'arrow-head' | 'arrow-control'
+const dragKind = ref<DragKind | null>(null)
+// Live copy of element being dragged, rendered instead of committed version
+const dragLive = ref<DiagramElement | null>(null)
+
+watch(tool, () => {
+  selectedId.value = null
+  dragKind.value = null
+  dragLive.value = null
+})
+
+// ---------- shared helpers ----------
 const elements = computed(() => props.modelValue.elements)
 
 function commit(next: DiagramElement[]) {
@@ -70,33 +85,140 @@ function toNorm(e: PointerEvent): Point {
   }
 }
 
-// hit-test: distance from point to element (normalized space) for eraser
-function distToElement(p: Point, el: DiagramElement): number {
-  const pts =
-    el.type === 'marker' ? [el.at] : el.points
-  let min = Infinity
-  for (const q of pts) {
-    const d = Math.hypot(p.x - q.x, p.y - q.y)
-    if (d < min) min = d
-  }
-  return min
+function dist(p: Point, q: Point) {
+  return Math.hypot(p.x - q.x, p.y - q.y)
 }
 
-function onPointerDown(e: PointerEvent) {
-  if (!props.editable) return
+function midpoint(a: Point, b: Point): Point {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+}
+
+function controlOf(el: ArrowElement): Point {
+  return el.control ?? midpoint(el.points[0], el.points[1])
+}
+
+// Distance from point to nearest vertex of element (normalized space)
+function distToElement(p: Point, el: DiagramElement): number {
+  if (el.type === 'marker') return dist(p, el.at)
+  const pts = el.type === 'arrow' && el.control
+    ? [...el.points, el.control]
+    : el.points
+  return Math.min(...pts.map((q) => dist(p, q)))
+}
+
+// ---------- select tool ----------
+const HIT_HANDLE = 0.055  // normalized hit radius for endpoint handles
+const HIT_BODY   = 0.030  // normalized hit radius for element body
+
+function onSelectDown(e: PointerEvent) {
+  const p = toNorm(e)
+  ;(e.target as Element).setPointerCapture?.(e.pointerId)
+
+  // ── priority 1: handles of already-selected element ──
+  if (selectedId.value) {
+    const sel = elements.value.find((el) => el.id === selectedId.value)
+    if (sel?.type === 'marker' && dist(p, sel.at) < HIT_HANDLE * 1.5) {
+      dragKind.value = 'marker'
+      dragLive.value = { ...sel }
+      return
+    }
+    if (sel?.type === 'arrow') {
+      if (dist(p, sel.points[0]) < HIT_HANDLE) {
+        dragKind.value = 'arrow-tail'
+        dragLive.value = { ...sel, points: [...sel.points] }
+        return
+      }
+      if (dist(p, sel.points[1]) < HIT_HANDLE) {
+        dragKind.value = 'arrow-head'
+        dragLive.value = { ...sel, points: [...sel.points] }
+        return
+      }
+      if (dist(p, controlOf(sel)) < HIT_HANDLE) {
+        dragKind.value = 'arrow-control'
+        dragLive.value = { ...sel, points: [...sel.points] }
+        return
+      }
+    }
+  }
+
+  // ── priority 2: hit-test all elements ──
+  const reversed = [...elements.value].reverse()
+
+  // Markers first (rendered on top)
+  for (const el of reversed) {
+    if (el.type === 'marker' && dist(p, el.at) < HIT_HANDLE * 1.5) {
+      selectedId.value = el.id
+      dragKind.value = 'marker'
+      dragLive.value = { ...el }
+      return
+    }
+  }
+
+  // Arrows: endpoint handles or body
+  for (const el of reversed) {
+    if (el.type !== 'arrow') continue
+    if (dist(p, el.points[0]) < HIT_HANDLE) {
+      selectedId.value = el.id
+      dragKind.value = 'arrow-tail'
+      dragLive.value = { ...el, points: [...el.points] }
+      return
+    }
+    if (dist(p, el.points[1]) < HIT_HANDLE) {
+      selectedId.value = el.id
+      dragKind.value = 'arrow-head'
+      dragLive.value = { ...el, points: [...el.points] }
+      return
+    }
+    if (distToElement(p, el) < HIT_BODY) {
+      selectedId.value = el.id
+      // No immediate drag on body-select — user drags a handle next
+      return
+    }
+  }
+
+  // Miss → deselect
+  selectedId.value = null
+}
+
+function onSelectMove(e: PointerEvent) {
+  if (!dragKind.value || !dragLive.value) return
+  const p = toNorm(e)
+  const el = dragLive.value
+  if (dragKind.value === 'marker' && el.type === 'marker') {
+    dragLive.value = { ...el, at: p }
+  } else if (dragKind.value === 'arrow-tail' && el.type === 'arrow') {
+    dragLive.value = { ...el, points: [p, el.points[1]] }
+  } else if (dragKind.value === 'arrow-head' && el.type === 'arrow') {
+    dragLive.value = { ...el, points: [el.points[0], p] }
+  } else if (dragKind.value === 'arrow-control' && el.type === 'arrow') {
+    dragLive.value = { ...el, control: p }
+  }
+}
+
+function onSelectUp() {
+  if (dragKind.value && dragLive.value) {
+    const updated = dragLive.value
+    commit(elements.value.map((el) => (el.id === updated.id ? updated : el)))
+  }
+  dragKind.value = null
+  dragLive.value = null
+}
+
+// ---------- draw tools ----------
+function onDrawDown(e: PointerEvent) {
   ;(e.target as Element).setPointerCapture?.(e.pointerId)
   const p = toNorm(e)
 
   if (tool.value === 'erase') {
     const hit = [...elements.value]
       .reverse()
-      .find((el) => distToElement(p, el) < 0.03)
+      .find((el) => distToElement(p, el) < HIT_BODY)
     if (hit) commit(elements.value.filter((el) => el.id !== hit.id))
     return
   }
 
   if (tool.value === 'marker') {
-    const m: MarkerElement = {
+    commit([...elements.value, {
       id: crypto.randomUUID(),
       type: 'marker',
       color: color.value,
@@ -104,8 +226,7 @@ function onPointerDown(e: PointerEvent) {
       at: p,
       label: markerLabel.value || '•',
       team: markerTeam.value,
-    }
-    commit([...elements.value, m])
+    } satisfies MarkerElement])
     return
   }
 
@@ -129,7 +250,7 @@ function onPointerDown(e: PointerEvent) {
   }
 }
 
-function onPointerMove(e: PointerEvent) {
+function onDrawMove(e: PointerEvent) {
   if (!drawing.value) return
   const p = toNorm(e)
   if (drawing.value.type === 'pen') {
@@ -139,27 +260,45 @@ function onPointerMove(e: PointerEvent) {
   }
 }
 
-function onPointerUp() {
+function onDrawUp() {
   if (!drawing.value) return
   const el = drawing.value
   drawing.value = null
   if (el.type === 'pen' && el.points.length < 2) return
   commit([...elements.value, el])
+  // Auto-select newly drawn arrow so user can immediately curve it
+  if (el.type === 'arrow') {
+    tool.value = 'select'
+    selectedId.value = el.id
+  }
 }
 
-function clearAll() {
-  commit([])
+// ---------- router to per-tool handlers ----------
+function onPointerDown(e: PointerEvent) {
+  if (!props.editable) return
+  if (tool.value === 'select') onSelectDown(e)
+  else onDrawDown(e)
 }
 
-function undo() {
-  commit(elements.value.slice(0, -1))
+function onPointerMove(e: PointerEvent) {
+  if (!props.editable) return
+  if (tool.value === 'select') onSelectMove(e)
+  else onDrawMove(e)
 }
 
-// ---------- Quick-start formation templates ----------
+function onPointerUp() {
+  if (!props.editable) return
+  if (tool.value === 'select') onSelectUp()
+  else onDrawUp()
+}
+
+function clearAll() { commit([]) }
+function undo() { commit(elements.value.slice(0, -1)) }
+
+// ---------- Quick-start templates ----------
 type TemplateName = '5out' | 'horns' | '4low'
 
 const TEMPLATES: Record<TemplateName, { x: number; y: number; label: string }[]> = {
-  // Five players spread behind the 3-point arc, one on each spot
   '5out': [
     { x: 0.50, y: 0.72, label: '1' },
     { x: 0.22, y: 0.60, label: '2' },
@@ -167,7 +306,6 @@ const TEMPLATES: Record<TemplateName, { x: number; y: number; label: string }[]>
     { x: 0.10, y: 0.36, label: '4' },
     { x: 0.90, y: 0.36, label: '5' },
   ],
-  // Guard at top, two bigs at elbows, two wings on the wings
   horns: [
     { x: 0.50, y: 0.72, label: '1' },
     { x: 0.33, y: 0.47, label: '2' },
@@ -175,7 +313,6 @@ const TEMPLATES: Record<TemplateName, { x: number; y: number; label: string }[]>
     { x: 0.18, y: 0.64, label: '4' },
     { x: 0.82, y: 0.64, label: '5' },
   ],
-  // Guard at top, two players at elbows, two on the low blocks
   '4low': [
     { x: 0.50, y: 0.78, label: '1' },
     { x: 0.36, y: 0.47, label: '2' },
@@ -190,7 +327,7 @@ function applyTemplate(name: TemplateName) {
     elements.value.length > 0 &&
     !confirm('This will replace existing diagram elements. Continue?')
   ) return
-  const newElements: MarkerElement[] = TEMPLATES[name].map((pos) => ({
+  commit(TEMPLATES[name].map((pos) => ({
     id: crypto.randomUUID(),
     type: 'marker' as const,
     color: '#37b6c4',
@@ -198,57 +335,87 @@ function applyTemplate(name: TemplateName) {
     at: { x: pos.x, y: pos.y },
     label: pos.label,
     team: 'home' as const,
-  }))
-  commit(newElements)
+  })))
 }
 
 // ---------- rendering helpers ----------
-const W = computed(() => dims.value.w)
-const H = computed(() => dims.value.h)
-
 function penPath(el: PenElement): string {
   return el.points
     .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x * W.value} ${p.y * H.value}`)
     .join(' ')
 }
 
-function dribblePath(a: Point, b: Point): string {
-  // zigzag between tail and head
-  const ax = a.x * W.value, ay = a.y * H.value
-  const bx = b.x * W.value, by = b.y * H.value
-  const len = Math.hypot(bx - ax, by - ay)
-  const segs = Math.max(4, Math.floor(len / 16))
-  const nx = (by - ay) / (len || 1)
-  const ny = -(bx - ax) / (len || 1)
-  const amp = 6
-  let d = `M ${ax} ${ay}`
-  for (let i = 1; i < segs; i++) {
-    const t = i / segs
-    const cx = ax + (bx - ax) * t
-    const cy = ay + (by - ay) * t
-    const off = i % 2 === 0 ? amp : -amp
-    d += ` L ${cx + nx * off} ${cy + ny * off}`
+// SVG path for a straight or curved arrow line
+function arrowLinePath(el: ArrowElement): string {
+  const ax = el.points[0].x * W.value, ay = el.points[0].y * H.value
+  const bx = el.points[1].x * W.value, by = el.points[1].y * H.value
+  if (el.control) {
+    const cx = el.control.x * W.value, cy = el.control.y * H.value
+    return `M ${ax} ${ay} Q ${cx} ${cy} ${bx} ${by}`
   }
-  d += ` L ${bx} ${by}`
+  return `M ${ax} ${ay} L ${bx} ${by}`
+}
+
+// Dribble zigzag; follows quadratic bezier when a control point is set
+function dribblePath(el: ArrowElement): string {
+  const ax = el.points[0].x * W.value, ay = el.points[0].y * H.value
+  const bx = el.points[1].x * W.value, by = el.points[1].y * H.value
+  const amp = 6
+
+  if (!el.control) {
+    const len = Math.hypot(bx - ax, by - ay)
+    const segs = Math.max(4, Math.floor(len / 16))
+    const nx = (by - ay) / (len || 1), ny = -(bx - ax) / (len || 1)
+    let d = `M ${ax} ${ay}`
+    for (let i = 1; i < segs; i++) {
+      const t = i / segs
+      const off = i % 2 === 0 ? amp : -amp
+      d += ` L ${ax + (bx - ax) * t + nx * off} ${ay + (by - ay) * t + ny * off}`
+    }
+    return d + ` L ${bx} ${by}`
+  }
+
+  // Curved dribble: zigzag along the quadratic bezier
+  const cx = el.control.x * W.value, cy = el.control.y * H.value
+  const approxLen = Math.hypot(cx - ax, cy - ay) + Math.hypot(bx - cx, by - cy)
+  const segs = Math.max(4, Math.floor(approxLen / 16))
+  let d = `M ${ax} ${ay}`
+  for (let i = 1; i <= segs; i++) {
+    const t = i / segs, mt = 1 - t
+    const px = mt * mt * ax + 2 * t * mt * cx + t * t * bx
+    const py = mt * mt * ay + 2 * t * mt * cy + t * t * by
+    // Tangent at t for perpendicular offset
+    const dtx = 2 * mt * (cx - ax) + 2 * t * (bx - cx)
+    const dty = 2 * mt * (cy - ay) + 2 * t * (by - cy)
+    const dtLen = Math.hypot(dtx, dty) || 1
+    const nx = dty / dtLen, ny = -dtx / dtLen
+    const off = i % 2 === 0 ? amp : -amp
+    d += i < segs
+      ? ` L ${px + nx * off} ${py + ny * off}`
+      : ` L ${px} ${py}`
+  }
   return d
 }
 
-function arrowHead(a: Point, b: Point): string {
-  const ax = a.x * W.value, ay = a.y * H.value
-  const bx = b.x * W.value, by = b.y * H.value
+// Arrowhead triangle at the tip; uses control→head direction when curved
+function arrowHead(el: ArrowElement): string {
+  const bx = el.points[1].x * W.value, by = el.points[1].y * H.value
+  const from = el.control ?? el.points[0]
+  const ax = from.x * W.value, ay = from.y * H.value
   const ang = Math.atan2(by - ay, bx - ax)
   const size = 14
-  const x1 = bx - size * Math.cos(ang - Math.PI / 6)
-  const y1 = by - size * Math.sin(ang - Math.PI / 6)
-  const x2 = bx - size * Math.cos(ang + Math.PI / 6)
-  const y2 = by - size * Math.sin(ang + Math.PI / 6)
-  return `${bx},${by} ${x1},${y1} ${x2},${y2}`
+  return [
+    `${bx},${by}`,
+    `${bx - size * Math.cos(ang - Math.PI / 6)},${by - size * Math.sin(ang - Math.PI / 6)}`,
+    `${bx - size * Math.cos(ang + Math.PI / 6)},${by - size * Math.sin(ang + Math.PI / 6)}`,
+  ].join(' ')
 }
 
-// screen notation: perpendicular bar at the head
-function screenBar(a: Point, b: Point): { x1: number; y1: number; x2: number; y2: number } {
-  const ax = a.x * W.value, ay = a.y * H.value
-  const bx = b.x * W.value, by = b.y * H.value
+// Screen bar perpendicular to line at the head
+function screenBar(el: ArrowElement): { x1: number; y1: number; x2: number; y2: number } {
+  const bx = el.points[1].x * W.value, by = el.points[1].y * H.value
+  const from = el.control ?? el.points[0]
+  const ax = from.x * W.value, ay = from.y * H.value
   const ang = Math.atan2(by - ay, bx - ax)
   const half = 12
   return {
@@ -259,9 +426,12 @@ function screenBar(a: Point, b: Point): { x1: number; y1: number; x2: number; y2
   }
 }
 
-const allElements = computed<DiagramElement[]>(() =>
-  drawing.value ? [...elements.value, drawing.value] : elements.value,
-)
+// All elements to render, substituting live drag copy when dragging
+const allElements = computed<DiagramElement[]>(() => {
+  const base = drawing.value ? [...elements.value, drawing.value] : [...elements.value]
+  if (!dragLive.value) return base
+  return base.map((el) => (el.id === dragLive.value!.id ? dragLive.value! : el))
+})
 
 const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
 </script>
@@ -272,7 +442,7 @@ const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
     <div v-if="editable" class="flex flex-wrap items-center gap-2">
       <div class="flex overflow-hidden rounded-md border border-ink-600">
         <button
-          v-for="t in (['pen', 'arrow', 'marker', 'erase'] as Tool[])"
+          v-for="t in (['select', 'pen', 'arrow', 'marker', 'erase'] as Tool[])"
           :key="t"
           class="px-3 py-1.5 text-xs font-semibold capitalize"
           :class="tool === t ? 'bg-rim text-ink-900' : 'bg-ink-800 text-chalk hover:bg-ink-700'"
@@ -313,7 +483,6 @@ const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
       </label>
 
       <div class="ml-auto flex gap-2">
-        <!-- Quick-start formation templates (half court only) -->
         <select
           v-if="modelValue.courtType === 'half'"
           class="input w-auto py-1.5 text-xs"
@@ -340,39 +509,39 @@ const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
       </div>
     </div>
 
+    <!-- hint for select mode -->
+    <p v-if="editable && tool === 'select'" class="text-[11px] text-ink-500">
+      Tap a marker or arrow to select · drag handles to move/resize · drag the red ● to curve an arrow
+    </p>
+
     <!-- court -->
     <div class="overflow-hidden rounded-lg border border-ink-700 bg-court-wood">
       <svg
         ref="svgRef"
         :viewBox="viewBox"
         class="block w-full touch-none select-none"
-        :style="{ aspectRatio: `${dims.w} / ${dims.h}`, cursor: editable ? 'crosshair' : 'default' }"
+        :style="{ aspectRatio: `${dims.w} / ${dims.h}`, cursor: editable && (tool === 'pen' || tool === 'arrow') ? 'crosshair' : 'default' }"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
         @pointerleave="onPointerUp"
       >
-        <!-- court markings (10 units == 1 ft) -->
+        <!-- court markings -->
         <g fill="none" stroke="#1c1614" stroke-width="3" opacity="0.85">
           <rect :x="BOUNDARY" :y="BOUNDARY" :width="W - BOUNDARY * 2" :height="H - BOUNDARY * 2" />
 
-          <!-- FULL COURT -->
           <template v-if="modelValue.courtType === 'full'">
             <line :x1="W / 2" :y1="BOUNDARY" :x2="W / 2" :y2="H - BOUNDARY" />
             <circle :cx="W / 2" :cy="H / 2" :r="LANE_ARC_R" />
-            <!-- left key + arc -->
             <rect :x="BOUNDARY" :y="H / 2 - KEY_HALF_W" :width="KEY_LENGTH + BASKET_INSET - BOUNDARY" :height="KEY_HALF_W * 2" />
             <circle :cx="KEY_LENGTH + BASKET_INSET - BOUNDARY" :cy="H / 2" :r="LANE_ARC_R" />
-            <!-- left 3-point: straight corner lines + arc centred on basket (BASKET_INSET, H/2) r=THREE_R -->
             <line :x1="BOUNDARY" :y1="H / 2 - (H / 2 - THREE_CORNER_X)" :x2="THREE_ARC_X_FULL" :y2="H / 2 - (H / 2 - THREE_CORNER_X)" />
             <line :x1="BOUNDARY" :y1="H / 2 + (H / 2 - THREE_CORNER_X)" :x2="THREE_ARC_X_FULL" :y2="H / 2 + (H / 2 - THREE_CORNER_X)" />
             <path :d="`M ${THREE_ARC_X_FULL} ${H / 2 - (H / 2 - THREE_CORNER_X)} A ${THREE_R} ${THREE_R} 0 0 1 ${THREE_ARC_X_FULL} ${H / 2 + (H / 2 - THREE_CORNER_X)}`" />
             <circle :cx="BASKET_INSET" :cy="H / 2" r="9" />
             <line :x1="BASKET_INSET - 16" :y1="H / 2 - 30" :x2="BASKET_INSET - 16" :y2="H / 2 + 30" />
-            <!-- right key + arc -->
             <rect :x="W - KEY_LENGTH - BASKET_INSET + BOUNDARY" :y="H / 2 - KEY_HALF_W" :width="KEY_LENGTH + BASKET_INSET - BOUNDARY" :height="KEY_HALF_W * 2" />
             <circle :cx="W - KEY_LENGTH - BASKET_INSET + BOUNDARY" :cy="H / 2" :r="LANE_ARC_R" />
-            <!-- right 3-point: straight corner lines + arc centred on basket (W-BASKET_INSET, H/2) r=THREE_R -->
             <line :x1="W - BOUNDARY" :y1="H / 2 - (H / 2 - THREE_CORNER_X)" :x2="W - THREE_ARC_X_FULL" :y2="H / 2 - (H / 2 - THREE_CORNER_X)" />
             <line :x1="W - BOUNDARY" :y1="H / 2 + (H / 2 - THREE_CORNER_X)" :x2="W - THREE_ARC_X_FULL" :y2="H / 2 + (H / 2 - THREE_CORNER_X)" />
             <path :d="`M ${W - THREE_ARC_X_FULL} ${H / 2 - (H / 2 - THREE_CORNER_X)} A ${THREE_R} ${THREE_R} 0 0 0 ${W - THREE_ARC_X_FULL} ${H / 2 + (H / 2 - THREE_CORNER_X)}`" />
@@ -380,11 +549,9 @@ const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
             <line :x1="W - BASKET_INSET + 16" :y1="H / 2 - 30" :x2="W - BASKET_INSET + 16" :y2="H / 2 + 30" />
           </template>
 
-          <!-- HALF COURT (offensive half, hoop at top) -->
           <template v-else>
             <rect :x="W / 2 - KEY_HALF_W" :y="BOUNDARY" :width="KEY_HALF_W * 2" :height="KEY_LENGTH + BASKET_INSET - BOUNDARY" />
             <circle :cx="W / 2" :cy="KEY_LENGTH + BASKET_INSET - BOUNDARY" :r="LANE_ARC_R" />
-            <!-- 3-point: straight corner lines (3 ft from each sideline) + arc centred on basket (W/2, BASKET_INSET) r=THREE_R -->
             <line :x1="THREE_CORNER_X" :y1="BOUNDARY" :x2="THREE_CORNER_X" :y2="THREE_ARC_Y_HALF" />
             <line :x1="W - THREE_CORNER_X" :y1="BOUNDARY" :x2="W - THREE_CORNER_X" :y2="THREE_ARC_Y_HALF" />
             <path :d="`M ${THREE_CORNER_X} ${THREE_ARC_Y_HALF} A ${THREE_R} ${THREE_R} 0 0 0 ${W - THREE_CORNER_X} ${THREE_ARC_Y_HALF}`" />
@@ -395,7 +562,6 @@ const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
 
         <!-- drawn elements -->
         <g v-for="el in allElements" :key="el.id">
-          <!-- pen -->
           <path
             v-if="el.type === 'pen'"
             :d="penPath(el)"
@@ -406,43 +572,42 @@ const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
             stroke-linejoin="round"
           />
 
-          <!-- arrow -->
           <template v-else-if="el.type === 'arrow'">
+            <!-- dribble wavy line -->
             <path
               v-if="el.style === 'dribble'"
-              :d="dribblePath(el.points[0], el.points[1])"
+              :d="dribblePath(el)"
               fill="none"
               :stroke="el.color"
               :stroke-width="el.width"
               stroke-linecap="round"
             />
-            <line
+            <!-- all other styles: straight or curved path -->
+            <path
               v-else
-              :x1="el.points[0].x * W"
-              :y1="el.points[0].y * H"
-              :x2="el.points[1].x * W"
-              :y2="el.points[1].y * H"
+              :d="arrowLinePath(el)"
+              fill="none"
               :stroke="el.color"
               :stroke-width="el.width"
               :stroke-dasharray="el.style === 'pass' ? '10 8' : undefined"
               stroke-linecap="round"
             />
+            <!-- arrowhead or screen bar -->
             <polygon
               v-if="el.style !== 'screen'"
-              :points="arrowHead(el.points[0], el.points[1])"
+              :points="arrowHead(el)"
               :fill="el.color"
             />
             <line
               v-else
-              v-bind="screenBar(el.points[0], el.points[1])"
+              v-bind="screenBar(el)"
               :stroke="el.color"
               :stroke-width="el.width + 1"
               stroke-linecap="round"
             />
           </template>
 
-          <!-- marker -->
-          <template v-else>
+          <template v-else-if="el.type === 'marker'">
             <circle
               :cx="el.at.x * W"
               :cy="el.at.y * H"
@@ -463,6 +628,55 @@ const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
             >
               {{ el.label }}
             </text>
+          </template>
+        </g>
+
+        <!-- selection handles (select tool only) -->
+        <g v-if="editable && tool === 'select' && selectedId">
+          <template v-for="el in allElements" :key="el.id + '-sel'">
+            <template v-if="el.id === selectedId">
+              <!-- marker: dashed ring -->
+              <circle
+                v-if="el.type === 'marker'"
+                :cx="el.at.x * W"
+                :cy="el.at.y * H"
+                r="23"
+                fill="none"
+                stroke="white"
+                stroke-width="2"
+                stroke-dasharray="5 3"
+                opacity="0.85"
+              />
+              <!-- arrow: tail, head, and curve-control handles -->
+              <template v-else-if="el.type === 'arrow'">
+                <!-- guide line to control point -->
+                <line
+                  :x1="el.points[0].x * W" :y1="el.points[0].y * H"
+                  :x2="controlOf(el).x * W" :y2="controlOf(el).y * H"
+                  stroke="white" stroke-width="1" stroke-dasharray="3 3" opacity="0.4"
+                />
+                <line
+                  :x1="controlOf(el).x * W" :y1="controlOf(el).y * H"
+                  :x2="el.points[1].x * W" :y2="el.points[1].y * H"
+                  stroke="white" stroke-width="1" stroke-dasharray="3 3" opacity="0.4"
+                />
+                <!-- tail handle -->
+                <circle
+                  :cx="el.points[0].x * W" :cy="el.points[0].y * H"
+                  r="9" fill="white" fill-opacity="0.9" stroke="#0d0f13" stroke-width="1.5"
+                />
+                <!-- head handle -->
+                <circle
+                  :cx="el.points[1].x * W" :cy="el.points[1].y * H"
+                  r="9" fill="white" fill-opacity="0.9" stroke="#0d0f13" stroke-width="1.5"
+                />
+                <!-- curve control handle (red) -->
+                <circle
+                  :cx="controlOf(el).x * W" :cy="controlOf(el).y * H"
+                  r="9" fill="#cc0000" fill-opacity="0.9" stroke="white" stroke-width="1.5"
+                />
+              </template>
+            </template>
           </template>
         </g>
       </svg>
