@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import type { Play, PlayDraft } from '@/types'
+import { useRouter } from 'vue-router'
+import type { Play } from '@/types'
 import { usePlays } from '@/composables/usePlays'
 import CourtCanvas from '@/components/CourtCanvas.vue'
-import PlayEditorModal from '@/components/PlayEditorModal.vue'
 
-const { plays, loading, error, fetchPlays, createPlay, updatePlay, deletePlay, duplicatePlay } = usePlays()
+const router = useRouter()
+const { plays, loading, error, fetchPlays, deletePlay, duplicatePlay } = usePlays()
 
-const editorOpen = ref(false)
-const editing = ref<Play | null>(null)
 const search = ref('')
 
 const filteredPlays = computed(() => {
@@ -23,26 +22,6 @@ const filteredPlays = computed(() => {
 
 onMounted(fetchPlays)
 
-function openNew() {
-  editing.value = null
-  editorOpen.value = true
-}
-function openEdit(p: Play) {
-  editing.value = p
-  editorOpen.value = true
-}
-
-async function onSave(draft: PlayDraft) {
-  if (editing.value) {
-    const updated = await updatePlay(editing.value.id, draft)
-    if (updated) editing.value = updated
-  } else {
-    const created = await createPlay(draft)
-    // keep editor open on the new play so clips can be attached
-    if (created) editing.value = created
-  }
-}
-
 async function onDelete(p: Play) {
   if (!confirm(`Delete "${p.name}"? This also removes its clips.`)) return
   await deletePlay(p.id)
@@ -50,10 +29,7 @@ async function onDelete(p: Play) {
 
 async function onDuplicate(p: Play) {
   const copy = await duplicatePlay(p)
-  if (copy) {
-    editing.value = copy
-    editorOpen.value = true
-  }
+  if (copy) router.push(`/plays/${copy.id}`)
 }
 </script>
 
@@ -64,7 +40,7 @@ async function onDuplicate(p: Play) {
         <h1 class="font-stencil text-2xl font-extrabold tracking-tight">Playbook</h1>
         <p class="text-sm text-ink-500">Diagram sets, attach film, run it back.</p>
       </div>
-      <button class="btn-primary" @click="openNew">+ New play</button>
+      <button class="btn-primary" @click="router.push('/plays/new')">+ New play</button>
     </header>
 
     <div class="mb-4">
@@ -82,7 +58,7 @@ async function onDuplicate(p: Play) {
 
     <div v-if="!loading && !plays.length" class="card p-10 text-center">
       <p class="mb-3 text-ink-500">No plays yet.</p>
-      <button class="btn-primary" @click="openNew">Diagram your first play</button>
+      <button class="btn-primary" @click="router.push('/plays/new')">Diagram your first play</button>
     </div>
 
     <p v-else-if="!loading && plays.length && !filteredPlays.length" class="text-sm text-ink-500">
@@ -104,19 +80,12 @@ async function onDuplicate(p: Play) {
           <p v-if="p.category" class="mt-0.5 text-xs uppercase tracking-wide text-rim">{{ p.category }}</p>
           <p v-if="p.description" class="mt-1 line-clamp-2 text-sm text-ink-500">{{ p.description }}</p>
           <div class="mt-3 flex gap-2">
-            <button class="btn-ghost grow py-1.5 text-xs" @click="openEdit(p)">Open</button>
+            <button class="btn-ghost grow py-1.5 text-xs" @click="router.push(`/plays/${p.id}`)">Open</button>
             <button class="btn-ghost py-1.5 text-xs" title="Duplicate" @click="onDuplicate(p)">Copy</button>
             <button class="btn-danger py-1.5 text-xs" @click="onDelete(p)">Delete</button>
           </div>
         </div>
       </article>
     </div>
-
-    <PlayEditorModal
-      v-if="editorOpen"
-      :play="editing"
-      @save="onSave"
-      @close="editorOpen = false"
-    />
   </section>
 </template>
