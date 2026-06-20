@@ -69,10 +69,10 @@ function commit(next: DiagramElement[]) {
 
 function setCourt(type: CourtType) {
   if (props.modelValue.courtType === type) return
-  if (
-    elements.value.length > 0 &&
-    !confirm('Switching court type will clear all diagram elements. Continue?')
-  ) return
+  const hasContent =
+    elements.value.length > 0 ||
+    (props.modelValue.phases?.some((p) => p.length > 0) ?? false)
+  if (hasContent && !confirm('Switching court type will clear all phases. Continue?')) return
   emit('update:modelValue', { courtType: type, elements: [] })
 }
 
@@ -434,6 +434,37 @@ const allElements = computed<DiagramElement[]>(() => {
 })
 
 const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
+
+// ---------- PNG export ----------
+function exportPng(filename = 'play.png') {
+  const svg = svgRef.value
+  if (!svg) return
+  const svgStr = new XMLSerializer().serializeToString(svg)
+  const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const img = new Image()
+  const w = svg.clientWidth || 800
+  const h = svg.clientHeight || 600
+  img.onload = () => {
+    const scale = 2
+    const canvas = document.createElement('canvas')
+    canvas.width = w * scale
+    canvas.height = h * scale
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#5c3d1e' // court wood background
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.scale(scale, scale)
+    ctx.drawImage(img, 0, 0, w, h)
+    URL.revokeObjectURL(url)
+    const a = document.createElement('a')
+    a.href = canvas.toDataURL('image/png')
+    a.download = filename
+    a.click()
+  }
+  img.src = url
+}
+
+defineExpose({ exportPng })
 </script>
 
 <template>

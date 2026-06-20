@@ -41,7 +41,8 @@ export type DiagramElement = PenElement | ArrowElement | MarkerElement
 
 export interface Diagram {
   courtType: CourtType
-  elements: DiagramElement[]
+  elements: DiagramElement[] // Phase 1 elements
+  phases?: DiagramElement[][] // Optional additional phases (index 0 = phase 2, etc.)
 }
 
 // ---------- Plays ----------

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { Diagram, PlayDraft } from '@/types'
+import type { Diagram, DiagramElement, PlayDraft } from '@/types'
 import { usePlays } from '@/composables/usePlays'
 import CourtCanvas from '@/components/CourtCanvas.vue'
+import PlayAnimator from '@/components/PlayAnimator.vue'
 import VideoUploader from '@/components/VideoUploader.vue'
 
 const route = useRoute()
@@ -46,6 +47,69 @@ const form = reactive<PlayDraft>({
 
 const saving = ref(false)
 
+// ---------- phase management ----------
+const activePhase = ref(0) // 0-indexed; 0 = phase 1
+
+const totalPhases = computed(() => 1 + (form.diagram.phases?.length ?? 0))
+
+// Phase-aware computed binding for CourtCanvas v-model
+const phaseDiagram = computed<Diagram>({
+  get() {
+    const els: DiagramElement[] =
+      activePhase.value === 0
+        ? form.diagram.elements
+        : (form.diagram.phases?.[activePhase.value - 1] ?? [])
+    return {
+      courtType: form.diagram.courtType,
+      elements: els,
+      // Pass phases through so CourtCanvas setCourt can detect content in other phases
+      phases: form.diagram.phases,
+    }
+  },
+  set(val: Diagram) {
+    if (val.courtType !== form.diagram.courtType) {
+      // Court type was switched — clear ALL phases and reset
+      form.diagram.courtType = val.courtType
+      form.diagram.elements = []
+      form.diagram.phases = []
+      activePhase.value = 0
+      return
+    }
+    if (activePhase.value === 0) {
+      form.diagram.elements = val.elements
+    } else {
+      if (!form.diagram.phases) form.diagram.phases = []
+      while (form.diagram.phases.length < activePhase.value) {
+        form.diagram.phases.push([])
+      }
+      form.diagram.phases[activePhase.value - 1] = val.elements
+    }
+  },
+})
+
+function addPhase() {
+  if (!form.diagram.phases) form.diagram.phases = []
+  form.diagram.phases.push([])
+  activePhase.value = form.diagram.phases.length // jump to the new phase
+}
+
+function deleteCurrentPhase() {
+  if (activePhase.value === 0 || !form.diagram.phases) return
+  form.diagram.phases.splice(activePhase.value - 1, 1)
+  activePhase.value = Math.min(activePhase.value, totalPhases.value - 1)
+}
+
+// ---------- animation preview ----------
+const animating = ref(false)
+
+// ---------- PNG export ----------
+const canvasRef = ref<InstanceType<typeof CourtCanvas> | null>(null)
+
+function exportPng() {
+  const phaseSuffix = totalPhases.value > 1 ? ` Phase ${activePhase.value + 1}` : ''
+  canvasRef.value?.exportPng(`${form.name || 'play'}${phaseSuffix}.png`)
+}
+
 // Populate form when play data arrives (handles direct-URL navigation)
 watch(
   play,
@@ -56,6 +120,7 @@ watch(
       form.category = p.category ?? ''
       form.court_type = p.court_type
       form.diagram = JSON.parse(JSON.stringify(p.diagram)) as Diagram
+      activePhase.value = 0 // reset to phase 1 when play changes
     }
   },
   { immediate: true },
@@ -147,9 +212,66 @@ async function save() {
 
       <!-- Right column: diagram (fills remaining width) -->
       <div class="min-w-0 flex-1">
-        <label class="label">Diagram</label>
-        <CourtCanvas v-model="form.diagram" editable />
+        <div class="mb-1.5 flex items-center gap-1">
+          <span class="label mb-0">Diagram</span>
+          <div class="ml-auto flex items-center gap-2">
+            <button
+              v-if="totalPhases > 1"
+              class="btn-ghost py-1 px-2.5 text-xs"
+              title="Preview animation"
+              @click="animating = true"
+            >
+              ▷ Preview
+            </button>
+            <button class="btn-ghost py-1 px-2.5 text-xs" title="Export current phase as PNG" @click="exportPng">
+              ↓ PNG
+            </button>
+          </div>
+        </div>
+
+        <!-- Phase tabs -->
+        <div class="mb-2 flex items-center gap-1 overflow-x-auto pb-0.5">
+          <button
+            v-for="i in totalPhases"
+            :key="i"
+            :class="[
+              'shrink-0 rounded px-3 py-1 text-xs font-medium transition',
+              activePhase === i - 1
+                ? 'bg-rim text-white'
+                : 'bg-ink-800 text-ink-400 hover:text-white',
+            ]"
+            @click="activePhase = i - 1"
+          >
+            Phase {{ i }}
+          </button>
+          <button
+            class="shrink-0 rounded px-3 py-1 text-xs text-ink-500 hover:text-white"
+            title="Add phase"
+            @click="addPhase"
+          >
+            + Add
+          </button>
+          <button
+            v-if="totalPhases > 1"
+            class="ml-auto shrink-0 rounded px-2 py-1 text-xs text-red-500 hover:text-red-300"
+            title="Delete current phase"
+            @click="deleteCurrentPhase"
+          >
+            Delete phase
+          </button>
+        </div>
+
+        <CourtCanvas ref="canvasRef" v-model="phaseDiagram" editable />
       </div>
     </div>
   </section>
+
+  <!-- Animation preview overlay -->
+  <PlayAnimator
+    v-if="animating"
+    :name="form.name || 'Play'"
+    :diagram="form.diagram"
+    @close="animating = false"
+  />
+
 </template>

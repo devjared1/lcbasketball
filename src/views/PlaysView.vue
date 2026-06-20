@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import type { Play } from '@/types'
 import { usePlays } from '@/composables/usePlays'
 import CourtCanvas from '@/components/CourtCanvas.vue'
+import PlayAnimator from '@/components/PlayAnimator.vue'
 
 const router = useRouter()
 const { plays, loading, error, fetchPlays, deletePlay, duplicatePlay } = usePlays()
@@ -31,6 +32,12 @@ async function onDuplicate(p: Play) {
   const copy = await duplicatePlay(p)
   if (copy) router.push(`/plays/${copy.id}`)
 }
+
+function phaseCount(p: Play): number {
+  return 1 + (p.diagram.phases?.length ?? 0)
+}
+
+const animPlay = ref<Play | null>(null)
 </script>
 
 <template>
@@ -73,14 +80,27 @@ async function onDuplicate(p: Play) {
         <div class="p-3">
           <div class="flex items-start justify-between gap-2">
             <h3 class="font-semibold leading-tight">{{ p.name }}</h3>
-            <span v-if="p.videos?.length" class="shrink-0 rounded bg-ink-700 px-1.5 py-0.5 text-[11px] text-ink-500">
-              ▶ {{ p.videos.length }}
-            </span>
+            <div class="flex shrink-0 items-center gap-1.5">
+              <span v-if="phaseCount(p) > 1" class="rounded bg-ink-700 px-1.5 py-0.5 text-[11px] text-ink-400">
+                {{ phaseCount(p) }} phases
+              </span>
+              <span v-if="p.videos?.length" class="rounded bg-ink-700 px-1.5 py-0.5 text-[11px] text-ink-500">
+                ▶ {{ p.videos.length }}
+              </span>
+            </div>
           </div>
           <p v-if="p.category" class="mt-0.5 text-xs uppercase tracking-wide text-rim">{{ p.category }}</p>
           <p v-if="p.description" class="mt-1 line-clamp-2 text-sm text-ink-500">{{ p.description }}</p>
           <div class="mt-3 flex gap-2">
             <button class="btn-ghost grow py-1.5 text-xs" @click="router.push(`/plays/${p.id}`)">Open</button>
+            <button
+              v-if="phaseCount(p) > 1"
+              class="btn-ghost py-1.5 text-xs"
+              title="Animate phases"
+              @click="animPlay = p"
+            >
+              ▷ Animate
+            </button>
             <button class="btn-ghost py-1.5 text-xs" title="Duplicate" @click="onDuplicate(p)">Copy</button>
             <button class="btn-danger py-1.5 text-xs" @click="onDelete(p)">Delete</button>
           </div>
@@ -88,4 +108,12 @@ async function onDuplicate(p: Play) {
       </article>
     </div>
   </section>
+
+  <!-- Animation overlay -->
+  <PlayAnimator
+    v-if="animPlay"
+    :name="animPlay.name"
+    :diagram="animPlay.diagram"
+    @close="animPlay = null"
+  />
 </template>
