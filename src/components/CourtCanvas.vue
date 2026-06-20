@@ -439,50 +439,66 @@ const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
 <template>
   <div class="flex flex-col gap-3">
     <!-- toolbar -->
-    <div v-if="editable" class="flex flex-wrap items-center gap-2">
-      <div class="flex overflow-hidden rounded-md border border-ink-600">
-        <button
-          v-for="t in (['select', 'pen', 'arrow', 'marker', 'erase'] as Tool[])"
-          :key="t"
-          class="px-3 py-1.5 text-xs font-semibold capitalize"
-          :class="tool === t ? 'bg-rim text-ink-900' : 'bg-ink-800 text-chalk hover:bg-ink-700'"
-          @click="tool = t"
-        >
-          {{ t }}
-        </button>
+    <div v-if="editable" class="flex flex-col gap-1.5">
+      <!-- Row 1: tool selector + court type toggle — guaranteed single line, no overflow -->
+      <div class="flex items-center gap-2">
+        <div class="flex overflow-hidden rounded-md border border-ink-600">
+          <button
+            v-for="t in (['select', 'pen', 'arrow', 'marker', 'erase'] as Tool[])"
+            :key="t"
+            class="px-3 py-1.5 text-xs font-semibold capitalize"
+            :class="tool === t ? 'bg-rim text-ink-900' : 'bg-ink-800 text-chalk hover:bg-ink-700'"
+            @click="tool = t"
+          >
+            {{ t }}
+          </button>
+        </div>
+        <div class="ml-auto flex overflow-hidden rounded-md border border-ink-600">
+          <button
+            v-for="c in (['half', 'full'] as CourtType[])"
+            :key="c"
+            class="px-3 py-1.5 text-xs font-semibold capitalize"
+            :class="modelValue.courtType === c ? 'bg-home text-ink-900' : 'bg-ink-800 text-chalk hover:bg-ink-700'"
+            @click="setCourt(c)"
+          >
+            {{ c }}
+          </button>
+        </div>
       </div>
 
-      <select v-if="tool === 'arrow'" v-model="arrowStyle" class="input w-auto py-1.5 text-xs">
-        <option value="pass">Pass (dashed)</option>
-        <option value="cut">Cut (solid)</option>
-        <option value="dribble">Dribble (wavy)</option>
-        <option value="screen">Screen (bar)</option>
-      </select>
-
-      <template v-if="tool === 'marker'">
-        <select v-model="markerTeam" class="input w-auto py-1.5 text-xs">
-          <option value="home">Home (cyan)</option>
-          <option value="away">Defense (orange)</option>
-          <option value="ball">Ball</option>
+      <!-- Row 2: context-sensitive options + action buttons (wraps on small screens) -->
+      <div class="flex flex-wrap items-center gap-2">
+        <select v-if="tool === 'arrow'" v-model="arrowStyle" class="input w-auto py-1.5 text-xs">
+          <option value="pass">Pass (dashed)</option>
+          <option value="cut">Cut (solid)</option>
+          <option value="dribble">Dribble (wavy)</option>
+          <option value="screen">Screen (bar)</option>
         </select>
-        <input
-          v-model="markerLabel"
-          maxlength="2"
-          class="input w-14 py-1.5 text-center text-xs"
-          aria-label="Marker label"
-        />
-      </template>
 
-      <label class="flex items-center gap-1 text-xs text-ink-500">
-        Color
-        <input v-model="color" type="color" class="h-7 w-8 cursor-pointer rounded border border-ink-600 bg-ink-800" />
-      </label>
-      <label class="flex items-center gap-1 text-xs text-ink-500">
-        Width
-        <input v-model.number="strokeWidth" type="range" min="1" max="8" class="w-20" />
-      </label>
+        <template v-if="tool === 'marker'">
+          <select v-model="markerTeam" class="input w-auto py-1.5 text-xs">
+            <option value="home">Home (cyan)</option>
+            <option value="away">Defense (orange)</option>
+            <option value="ball">Ball</option>
+          </select>
+          <input
+            v-model="markerLabel"
+            maxlength="2"
+            class="input w-14 py-1.5 text-center text-xs"
+            aria-label="Marker label"
+          />
+        </template>
 
-      <div class="ml-auto flex gap-2">
+        <label class="flex items-center gap-1 text-xs text-ink-500">
+          Color
+          <input v-model="color" type="color" class="h-7 w-8 cursor-pointer rounded border border-ink-600 bg-ink-800" />
+        </label>
+        <label class="flex items-center gap-1 text-xs text-ink-500">
+          Width
+          <input v-model.number="strokeWidth" type="range" min="1" max="8" class="w-20" />
+        </label>
+
+        <span class="grow" />
         <select
           v-if="modelValue.courtType === 'half'"
           class="input w-auto py-1.5 text-xs"
@@ -495,17 +511,6 @@ const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
         </select>
         <button class="btn-ghost py-1.5 text-xs" @click="undo">Undo</button>
         <button class="btn-ghost py-1.5 text-xs" @click="clearAll">Clear</button>
-        <div class="flex overflow-hidden rounded-md border border-ink-600">
-          <button
-            v-for="c in (['half', 'full'] as CourtType[])"
-            :key="c"
-            class="px-3 py-1.5 text-xs font-semibold capitalize"
-            :class="modelValue.courtType === c ? 'bg-home text-ink-900' : 'bg-ink-800 text-chalk hover:bg-ink-700'"
-            @click="setCourt(c)"
-          >
-            {{ c }}
-          </button>
-        </div>
       </div>
     </div>
 
@@ -520,7 +525,7 @@ const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
         ref="svgRef"
         :viewBox="viewBox"
         class="block w-full touch-none select-none"
-        :style="{ aspectRatio: `${dims.w} / ${dims.h}`, cursor: editable && (tool === 'pen' || tool === 'arrow') ? 'crosshair' : 'default' }"
+        :style="{ aspectRatio: `${dims.w} / ${dims.h}`, maxHeight: 'min(70vh, 650px)', cursor: editable && (tool === 'pen' || tool === 'arrow') ? 'crosshair' : 'default' }"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"

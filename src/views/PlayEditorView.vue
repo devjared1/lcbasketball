@@ -105,48 +105,51 @@ async function save() {
       </button>
     </div>
 
-    <!-- metadata -->
-    <div class="grid gap-3 sm:grid-cols-3">
-      <div>
-        <label class="label" for="pe-name">Name</label>
-        <input
-          id="pe-name"
-          v-model="form.name"
-          class="input"
-          placeholder="Horns flare"
-          autofocus
-        />
-      </div>
-      <div>
-        <label class="label" for="pe-cat">Category</label>
-        <select id="pe-cat" v-model="form.category" class="input">
-          <option value="">— No category —</option>
-          <option v-for="cat in PLAY_CATEGORIES" :key="cat" :value="cat">{{ cat }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="label" for="pe-desc">Notes</label>
-        <textarea
-          id="pe-desc"
-          v-model="form.description"
-          rows="2"
-          class="input resize-none"
-          placeholder="When to call it, reads, counters…"
-        />
-      </div>
-    </div>
+    <!-- Two-column on lg (iPad landscape+): left = metadata/video, right = diagram -->
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
+      <!-- Left column: metadata + video clips -->
+      <div class="flex flex-col gap-3 lg:w-64 lg:shrink-0">
+        <div>
+          <label class="label" for="pe-name">Name</label>
+          <input
+            id="pe-name"
+            v-model="form.name"
+            class="input"
+            placeholder="Horns flare"
+            autofocus
+          />
+        </div>
+        <div>
+          <label class="label" for="pe-cat">Category</label>
+          <select id="pe-cat" v-model="form.category" class="input">
+            <option value="">— No category —</option>
+            <option v-for="cat in PLAY_CATEGORIES" :key="cat" :value="cat">{{ cat }}</option>
+          </select>
+        </div>
+        <div>
+          <label class="label" for="pe-desc">Notes</label>
+          <textarea
+            id="pe-desc"
+            v-model="form.description"
+            rows="3"
+            class="input resize-none"
+            placeholder="When to call it, reads, counters…"
+          />
+        </div>
 
-    <!-- diagram -->
-    <div>
-      <label class="label">Diagram</label>
-      <CourtCanvas v-model="form.diagram" editable />
-    </div>
+        <!-- video clips (only once the play exists in the DB) -->
+        <div v-if="play" class="border-t border-ink-700 pt-3">
+          <label class="label">Video clips</label>
+          <VideoUploader :play="play" />
+        </div>
+        <p v-else class="text-xs text-ink-500">Save the play first to attach video clips.</p>
+      </div>
 
-    <!-- video clips (only once the play exists in the DB) -->
-    <div v-if="play" class="border-t border-ink-700 pt-4">
-      <label class="label">Video clips</label>
-      <VideoUploader :play="play" />
+      <!-- Right column: diagram (fills remaining width) -->
+      <div class="min-w-0 flex-1">
+        <label class="label">Diagram</label>
+        <CourtCanvas v-model="form.diagram" editable />
+      </div>
     </div>
-    <p v-else class="text-xs text-ink-500">Save the play first to attach video clips.</p>
   </section>
 </template>
