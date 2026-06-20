@@ -2,11 +2,11 @@
 
 1. - [x] Edit/Delete players
 2. - [x] Edit/Delete games
-3. - [ ] Multi phase plays. Sometimes plays have several different actions. Need to be able to create and display multiple phases
+3. - [x] Multi phase plays. Sometimes plays have several different actions. Need to be able to create and display multiple phases
 4. - [x] Ability to curve all cut lines
 5. - [x] Duplicate a play (copy an existing play as a starting point)
 6. - [x] Search / filter plays by category or name
-7. - [ ] Export a play as a PNG or PDF (screenshot the SVG canvas)
+7. - [x] Export a play as a PNG or PDF (screenshot the SVG canvas)
 8. - [ ] Print-friendly play sheet (one play per page, diagram + notes)
 9. - [ ] Drag-to-reorder plays in the grid
 10. - [x] Quick-start marker templates (e.g. 5-out, 4-low, horns) to pre-place players
@@ -18,9 +18,10 @@
 16. - [ ] Substitution log — track which players were on the floor each possession
 17. - [ ] Season stats view — aggregate box scores across all games into season averages and totals
 18. - [ ] PWA / offline support — service worker so the app loads and is usable without a network connection
-19. - [ ] Play animation mode — step through multi-phase plays with transitions on the diagram
+19. - [x] Play animation mode — step through multi-phase plays with transitions on the diagram
 20. - [x] Click/Touch drag to move markers on court
 21. - [x] Click/Touch edit an existing cut line on court (extend/shorten, change direction)
+22. - [ ] Auto increment player number after dropping marker
 
 ---
 
@@ -58,5 +59,6 @@
 6. - [x] Replace dark `ink-900` background with true black (`#000`) to match iOS dark mode aesthetic on OLED screens
 7. - [x] Add a bottom tab bar navigation (Plays / Stats) in place of the current top nav — standard iOS navigation pattern on mobile
 8. - [ ] Add LC logo to court
+9. - [ ] Use icons instead of buttons where it makes sense to conserve space
 
 ---
