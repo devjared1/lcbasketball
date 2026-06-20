@@ -19,6 +19,8 @@
 17. - [ ] Season stats view — aggregate box scores across all games into season averages and totals
 18. - [ ] PWA / offline support — service worker so the app loads and is usable without a network connection
 19. - [ ] Play animation mode — step through multi-phase plays with transitions on the diagram
+20. - [ ] Click/Touch drag to move markers on court
+21. - [ ] Click/Touch edit an existing cut line on court (extend/shorten, change direction) 
 
 ---
 
@@ -55,5 +57,6 @@
 5. - [x] Swap current orange `rim` accent to **red** to match Lawrence County's school colors
 6. - [x] Replace dark `ink-900` background with true black (`#000`) to match iOS dark mode aesthetic on OLED screens
 7. - [x] Add a bottom tab bar navigation (Plays / Stats) in place of the current top nav — standard iOS navigation pattern on mobile
+8. - [ ] Add LC logo to court
 
 ---
