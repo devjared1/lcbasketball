@@ -104,3 +104,71 @@ create policy dev_video_del   on storage.objects for delete to anon using (bucke
 -- create policy auth_video_read  on storage.objects for select to authenticated using (bucket_id = 'play-videos');
 -- create policy auth_video_write on storage.objects for insert to authenticated with check (bucket_id = 'play-videos');
 -- create policy auth_video_del   on storage.objects for delete to authenticated using (bucket_id = 'play-videos');
+
+-- ============================================================
+-- Migration: opponent scouting, quarter tracking, shot chart,
+--            practice plans, substitution log
+-- Apply in: Supabase Dashboard → SQL Editor → New query → Run
+-- ============================================================
+
+-- Opponent scouting flag on plays
+alter table public.plays add column if not exists is_scouting boolean not null default false;
+
+-- Period/quarter tracking on stat events
+alter table public.stat_events add column if not exists period smallint not null default 1;
+
+-- Shot chart events
+create table if not exists public.shot_events (
+  id         uuid primary key default gen_random_uuid(),
+  game_id    uuid not null references public.games(id) on delete cascade,
+  player_id  uuid not null references public.players(id) on delete cascade,
+  x          float8 not null,
+  y          float8 not null,
+  made       boolean not null,
+  period     smallint not null default 1,
+  created_at timestamptz not null default now()
+);
+create index if not exists shot_events_game_idx on public.shot_events(game_id);
+
+-- Practice plan builder
+create table if not exists public.practice_plans (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  planned_for date,
+  notes       text,
+  created_at  timestamptz not null default now()
+);
+
+create table if not exists public.practice_plan_items (
+  id           uuid primary key default gen_random_uuid(),
+  plan_id      uuid not null references public.practice_plans(id) on delete cascade,
+  play_id      uuid references public.plays(id) on delete set null,
+  label        text,
+  duration_min int not null default 5,
+  sort_order   int not null default 0,
+  notes        text,
+  created_at   timestamptz not null default now()
+);
+create index if not exists plan_items_plan_idx on public.practice_plan_items(plan_id);
+
+-- Substitution log
+create table if not exists public.sub_events (
+  id             uuid primary key default gen_random_uuid(),
+  game_id        uuid not null references public.games(id) on delete cascade,
+  player_id_in   uuid not null references public.players(id) on delete cascade,
+  player_id_out  uuid not null references public.players(id) on delete cascade,
+  period         smallint not null default 1,
+  created_at     timestamptz not null default now()
+);
+create index if not exists sub_events_game_idx on public.sub_events(game_id);
+
+-- RLS dev policies for new tables
+create policy dev_all_shot_events  on public.shot_events  for all to anon using (true) with check (true);
+create policy dev_all_plans        on public.practice_plans for all to anon using (true) with check (true);
+create policy dev_all_plan_items   on public.practice_plan_items for all to anon using (true) with check (true);
+create policy dev_all_sub_events   on public.sub_events   for all to anon using (true) with check (true);
+
+alter table public.shot_events       enable row level security;
+alter table public.practice_plans    enable row level security;
+alter table public.practice_plan_items enable row level security;
+alter table public.sub_events        enable row level security;

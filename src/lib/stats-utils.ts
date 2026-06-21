@@ -1,5 +1,15 @@
 import type { BoxScoreRow, Player, StatEvent } from '@/types'
 
+export interface SeasonRow extends BoxScoreRow {
+  gp: number
+  ppg: number
+  rpg: number
+  apg: number
+  fg_pct: number
+  three_pct: number
+  ft_pct: number
+}
+
 function emptyRow(p: Player): BoxScoreRow {
   return {
     player_id: p.id,
@@ -34,6 +44,30 @@ export function buildBoxScore(roster: Player[], evts: StatEvent[]): BoxScoreRow[
     }
   }
   return [...rows.values()].sort((a, b) => b.pts - a.pts)
+}
+
+export function buildSeasonStats(roster: Player[], evts: StatEvent[]): SeasonRow[] {
+  const base = buildBoxScore(roster, evts)
+  // Count unique game_ids per player
+  const gpMap = new Map<string, Set<string>>()
+  for (const e of evts) {
+    if (!gpMap.has(e.player_id)) gpMap.set(e.player_id, new Set())
+    gpMap.get(e.player_id)!.add(e.game_id)
+  }
+  return base.map((r) => {
+    const gp = gpMap.get(r.player_id)?.size ?? 0
+    const div = gp || 1
+    return {
+      ...r,
+      gp,
+      ppg: Math.round((r.pts / div) * 10) / 10,
+      rpg: Math.round((r.reb / div) * 10) / 10,
+      apg: Math.round((r.ast / div) * 10) / 10,
+      fg_pct: r.fga ? Math.round((r.fgm / r.fga) * 1000) / 10 : 0,
+      three_pct: r.tpa ? Math.round((r.tpm / r.tpa) * 1000) / 10 : 0,
+      ft_pct: r.fta ? Math.round((r.ftm / r.fta) * 1000) / 10 : 0,
+    }
+  })
 }
 
 export function boxScoreToCsv(rows: BoxScoreRow[], gameLabel: string): string {

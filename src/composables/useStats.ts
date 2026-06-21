@@ -1,12 +1,14 @@
 import { ref } from 'vue'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
-import type { Game, Player, StatEvent, StatType } from '@/types'
+import type { Game, Player, StatEvent, StatType, SubEvent } from '@/types'
 
 // Module-level singletons — state is shared across all component instances.
 // Intentional for a single-coach app; revisit if multi-user context is ever needed.
 const players = ref<Player[]>([])
 const games = ref<Game[]>([])
 const events = ref<StatEvent[]>([])
+const allEvents = ref<StatEvent[]>([])
+const subEvents = ref<SubEvent[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 
@@ -101,15 +103,26 @@ export function useStats() {
     return true
   }
 
+  async function fetchAllEvents() {
+    if (!isSupabaseConfigured) return
+    const { data, error: err } = await supabase
+      .from('stat_events')
+      .select('*')
+      .order('created_at', { ascending: true })
+    if (err) error.value = err.message
+    else allEvents.value = (data ?? []) as StatEvent[]
+  }
+
   // Append-only: record one stat event (the audit trail). Undo deletes the last.
   async function recordStat(
     gameId: string,
     playerId: string,
     stat: StatType,
+    period = 1,
   ): Promise<StatEvent | null> {
     const { data, error: err } = await supabase
       .from('stat_events')
-      .insert({ game_id: gameId, player_id: playerId, stat })
+      .insert({ game_id: gameId, player_id: playerId, stat, period })
       .select()
       .single()
     if (err) {
@@ -118,6 +131,33 @@ export function useStats() {
     }
     events.value = [...events.value, data as StatEvent]
     return data as StatEvent
+  }
+
+  async function fetchSubEvents(gameId: string) {
+    if (!isSupabaseConfigured) return
+    const { data, error: err } = await supabase
+      .from('sub_events')
+      .select('*')
+      .eq('game_id', gameId)
+      .order('created_at', { ascending: true })
+    if (err) error.value = err.message
+    else subEvents.value = (data ?? []) as SubEvent[]
+  }
+
+  async function recordSub(
+    gameId: string,
+    playerIdIn: string,
+    playerIdOut: string,
+    period = 1,
+  ): Promise<boolean> {
+    const { data, error: err } = await supabase
+      .from('sub_events')
+      .insert({ game_id: gameId, player_id_in: playerIdIn, player_id_out: playerIdOut, period })
+      .select()
+      .single()
+    if (err) { error.value = err.message; return false }
+    subEvents.value = [...subEvents.value, data as SubEvent]
+    return true
   }
 
   async function undoLastFor(playerId: string): Promise<boolean> {
@@ -137,11 +177,16 @@ export function useStats() {
     players,
     games,
     events,
+    allEvents,
+    subEvents,
     loading,
     error,
     fetchPlayers,
     fetchGames,
     fetchEvents,
+    fetchAllEvents,
+    fetchSubEvents,
+    recordSub,
     addPlayer,
     updatePlayer,
     deletePlayer,

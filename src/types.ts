@@ -62,6 +62,7 @@ export interface Play {
   category: string | null
   court_type: CourtType
   diagram: Diagram
+  is_scouting: boolean
   created_at: string
   updated_at: string
   videos?: PlayVideo[]
@@ -108,6 +109,50 @@ export interface StatEvent {
   game_id: string
   player_id: string
   stat: StatType
+  period: number
+  created_at: string
+}
+
+// ---------- Shot chart ----------
+export interface ShotEvent {
+  id: string
+  game_id: string
+  player_id: string
+  x: number // 0..1 normalized court position
+  y: number
+  made: boolean
+  period: number
+  created_at: string
+}
+
+// ---------- Practice plans ----------
+export interface PracticePlan {
+  id: string
+  name: string
+  planned_for: string | null // ISO date
+  notes: string | null
+  created_at: string
+}
+
+export interface PracticePlanItem {
+  id: string
+  plan_id: string
+  play_id: string | null
+  label: string | null
+  duration_min: number
+  sort_order: number
+  notes: string | null
+  created_at: string
+  play?: { name: string; diagram: Diagram } | null
+}
+
+// ---------- Substitution log ----------
+export interface SubEvent {
+  id: string
+  game_id: string
+  player_id_in: string
+  player_id_out: string
+  period: number
   created_at: string
 }
 
