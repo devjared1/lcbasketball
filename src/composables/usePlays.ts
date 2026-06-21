@@ -95,6 +95,7 @@ export function usePlays() {
       category: original.category ?? '',
       court_type: original.court_type,
       diagram: JSON.parse(JSON.stringify(original.diagram)),
+      is_scouting: original.is_scouting,
     }
     return createPlay(draft)
   }
