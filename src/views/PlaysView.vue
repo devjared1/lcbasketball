@@ -9,12 +9,18 @@ import PlayAnimator from '@/components/PlayAnimator.vue'
 const router = useRouter()
 const { plays, loading, error, fetchPlays, deletePlay, duplicatePlay } = usePlays()
 
+// ---- tabs: playbook vs. scouting ----
+const activeTab = ref<'playbook' | 'scouting'>('playbook')
 const search = ref('')
+
+const tabPlays = computed(() =>
+  plays.value.filter((p) => p.is_scouting === (activeTab.value === 'scouting')),
+)
 
 const filteredPlays = computed(() => {
   const q = search.value.trim().toLowerCase()
-  if (!q) return plays.value
-  return plays.value.filter(
+  if (!q) return tabPlays.value
+  return tabPlays.value.filter(
     (p) =>
       p.name.toLowerCase().includes(q) ||
       (p.category ?? '').toLowerCase().includes(q),
@@ -38,11 +44,48 @@ function phaseCount(p: Play): number {
 }
 
 const animPlay = ref<Play | null>(null)
+
+// ---- drag-to-reorder (localStorage) ----
+const STORAGE_KEY = 'lc-plays-order'
+const customOrder = ref<string[]>(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]'))
+const draggingId = ref<string | null>(null)
+
+const sortedFiltered = computed(() => {
+  const orderMap = new Map(customOrder.value.map((id, i) => [id, i]))
+  return [...filteredPlays.value].sort((a, b) => {
+    const ai = orderMap.has(a.id) ? orderMap.get(a.id)! : Infinity
+    const bi = orderMap.has(b.id) ? orderMap.get(b.id)! : Infinity
+    // Both unknown → keep original order from server (updated_at desc)
+    return ai === Infinity && bi === Infinity ? 0 : ai - bi
+  })
+})
+
+function onDragStart(e: DragEvent, p: Play) {
+  draggingId.value = p.id
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+}
+
+function onDragOver(e: DragEvent, target: Play) {
+  e.preventDefault()
+  if (!draggingId.value || draggingId.value === target.id) return
+  const ids = sortedFiltered.value.map((p) => p.id)
+  const from = ids.indexOf(draggingId.value)
+  const to = ids.indexOf(target.id)
+  if (from === -1 || to === -1) return
+  ids.splice(from, 1)
+  ids.splice(to, 0, draggingId.value)
+  customOrder.value = ids
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(ids))
+}
+
+function onDragEnd() {
+  draggingId.value = null
+}
 </script>
 
 <template>
   <section>
-    <header class="mb-5 flex items-center justify-between">
+    <header class="mb-4 flex items-center justify-between">
       <div>
         <h1 class="font-stencil text-2xl font-extrabold tracking-tight">Playbook</h1>
         <p class="text-sm text-ink-500">Diagram sets, attach film, run it back.</p>
@@ -50,30 +93,58 @@ const animPlay = ref<Play | null>(null)
       <button class="btn-primary" @click="router.push('/plays/new')">+ New play</button>
     </header>
 
+    <!-- Playbook / Scouting tabs -->
+    <div class="mb-4 flex gap-0 overflow-hidden rounded-lg border border-ink-700">
+      <button
+        v-for="tab in (['playbook', 'scouting'] as const)"
+        :key="tab"
+        :class="[
+          'flex-1 py-2 text-sm font-medium transition',
+          activeTab === tab ? 'bg-ink-700 text-chalk' : 'text-ink-500 hover:text-chalk',
+        ]"
+        @click="activeTab = tab; search = ''"
+      >
+        {{ tab === 'playbook' ? 'Playbook' : 'Scouting' }}
+      </button>
+    </div>
+
     <div class="mb-4">
       <input
         v-model="search"
         class="input"
-        placeholder="Search by name or category…"
+        :placeholder="activeTab === 'playbook' ? 'Search plays…' : 'Search scouting reports…'"
       />
     </div>
 
     <p v-if="error" class="mb-4 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
       {{ error }}
     </p>
-    <p v-if="loading" class="text-sm text-ink-500">Loading plays…</p>
+    <p v-if="loading" class="text-sm text-ink-500">Loading…</p>
 
-    <div v-if="!loading && !plays.length" class="card p-10 text-center">
-      <p class="mb-3 text-ink-500">No plays yet.</p>
-      <button class="btn-primary" @click="router.push('/plays/new')">Diagram your first play</button>
+    <div v-if="!loading && !tabPlays.length" class="card p-10 text-center">
+      <p class="mb-3 text-ink-500">
+        {{ activeTab === 'playbook' ? 'No plays yet.' : 'No scouting reports yet.' }}
+      </p>
+      <button class="btn-primary" @click="router.push('/plays/new')">
+        {{ activeTab === 'playbook' ? 'Diagram your first play' : 'Add scouting report' }}
+      </button>
     </div>
 
-    <p v-else-if="!loading && plays.length && !filteredPlays.length" class="text-sm text-ink-500">
+    <p v-else-if="!loading && tabPlays.length && !filteredPlays.length" class="text-sm text-ink-500">
       No plays match "{{ search }}".
     </p>
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <article v-for="p in filteredPlays" :key="p.id" class="card overflow-hidden">
+      <article
+        v-for="p in sortedFiltered"
+        :key="p.id"
+        class="card cursor-grab overflow-hidden active:cursor-grabbing"
+        :class="draggingId === p.id ? 'opacity-40 ring-2 ring-rim' : ''"
+        draggable="true"
+        @dragstart="onDragStart($event, p)"
+        @dragover="onDragOver($event, p)"
+        @dragend="onDragEnd"
+      >
         <div class="pointer-events-none bg-court-wood">
           <CourtCanvas :model-value="p.diagram" />
         </div>
@@ -98,9 +169,7 @@ const animPlay = ref<Play | null>(null)
               class="btn-ghost py-1.5 text-xs"
               title="Animate phases"
               @click="animPlay = p"
-            >
-              ▷ Animate
-            </button>
+            >▷</button>
             <button class="btn-ghost py-1.5 text-xs" title="Duplicate" @click="onDuplicate(p)">Copy</button>
             <button class="btn-danger py-1.5 text-xs" @click="onDelete(p)">Delete</button>
           </div>
@@ -109,7 +178,6 @@ const animPlay = ref<Play | null>(null)
     </div>
   </section>
 
-  <!-- Animation overlay -->
   <PlayAnimator
     v-if="animPlay"
     :name="animPlay.name"

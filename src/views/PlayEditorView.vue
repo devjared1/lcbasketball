@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { Diagram, DiagramElement, PlayDraft } from '@/types'
 import { usePlays } from '@/composables/usePlays'
+import { useStats } from '@/composables/useStats'
 import CourtCanvas from '@/components/CourtCanvas.vue'
 import PlayAnimator from '@/components/PlayAnimator.vue'
 import VideoUploader from '@/components/VideoUploader.vue'
@@ -10,6 +11,7 @@ import VideoUploader from '@/components/VideoUploader.vue'
 const route = useRoute()
 const router = useRouter()
 const { plays, fetchPlays, createPlay, updatePlay } = usePlays()
+const { players, fetchPlayers } = useStats()
 
 // null when on /plays/new; UUID string when on /plays/:id
 const playId = computed(() => (route.params.id as string) || null)
@@ -19,6 +21,7 @@ const isNew = computed(() => !playId.value)
 onMounted(async () => {
   // Support direct navigation to /plays/:id without going through PlaysView
   if (!plays.value.length) await fetchPlays()
+  if (!players.value.length) await fetchPlayers()
 })
 
 const PLAY_CATEGORIES = [
@@ -43,6 +46,7 @@ const form = reactive<PlayDraft>({
   category: '',
   court_type: 'half',
   diagram: blankDiagram(),
+  is_scouting: false,
 })
 
 const saving = ref(false)
@@ -120,6 +124,7 @@ watch(
       form.category = p.category ?? ''
       form.court_type = p.court_type
       form.diagram = JSON.parse(JSON.stringify(p.diagram)) as Diagram
+      form.is_scouting = p.is_scouting
       activePhase.value = 0 // reset to phase 1 when play changes
     }
   },
@@ -200,6 +205,23 @@ async function save() {
             class="input resize-none"
             placeholder="When to call it, reads, counters…"
           />
+        </div>
+
+        <!-- Scouting toggle -->
+        <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-ink-700 px-3 py-2.5">
+          <input type="checkbox" v-model="form.is_scouting" class="h-4 w-4 rounded accent-rim" />
+          <span class="text-sm font-medium">Opponent scouting report</span>
+        </label>
+
+        <!-- Roster reference -->
+        <div v-if="players.length" class="rounded-lg border border-ink-700 p-3">
+          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">Roster</p>
+          <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+            <div v-for="pl in players" :key="pl.id" class="flex items-center gap-1.5">
+              <span class="w-6 shrink-0 text-right font-mono text-ink-400 text-xs">#{{ pl.number ?? '—' }}</span>
+              <span class="truncate">{{ pl.name }}</span>
+            </div>
+          </div>
         </div>
 
         <!-- video clips (only once the play exists in the DB) -->
