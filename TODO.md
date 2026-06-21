@@ -22,6 +22,12 @@
 20. - [x] Click/Touch drag to move markers on court
 21. - [x] Click/Touch edit an existing cut line on court (extend/shorten, change direction)
 22. - [ ] Auto increment player number after dropping marker
+23. - [ ] Record final game score (our score vs. opponent score) on the Game record — currently no way to log the final result
+24. - [ ] Text annotations on play diagrams — allow coach to add a short text label anywhere on the court (e.g. "screen here", "wait for cut")
+25. - [ ] Delete individual shot events from the shot chart (tap a marker to highlight, then delete) — `deleteShot` exists in composable but no UI exposes it
+26. - [ ] Shot chart period filter — filter the displayed shot markers by quarter (currently all shots for the game are overlaid regardless of period)
+27. - [ ] Season stats CSV export — "Export Season CSV" button on the Season tab similar to the per-game export
+28. - [ ] Lineup / on-court tracker — show which 5 players are currently on the floor based on sub events, highlight them in the tracker
 
 ---
 
@@ -33,6 +39,10 @@
 4. - [x] No client-side file-size check before video upload — very large files queue silently and may fail at the Storage level with no actionable message shown to the user
 5. - [x] The empty `watch(() => props.modelValue.courtType, () => {})` in `CourtCanvas.vue` is dead code and should be removed
 6. - [x] Saving a play does not disable the Save button during the async call — rapid double-taps can create duplicate records
+7. - [ ] `JSON.parse` on the localStorage play-order key in PlaysView has no try/catch — corrupted storage will crash the plays grid with an uncaught SyntaxError
+8. - [ ] Shot chart pending-shot overlay (`pendingScreenX/Y`) is computed at click time and not updated if the viewport is resized or device is rotated before the user taps Made/Miss — overlay can end up off-screen
+9. - [ ] Creating a game with an empty opponent string is not blocked — after the `.trim()` check passes an empty string, the row is inserted with `opponent: ""` and shows as a blank entry in the list
+10. - [ ] Play editor: deleting the last phase while `activePhase` is on it doesn't guard the index — `phaseDiagram` getter may reference `phases[undefined]` and render a blank canvas
 
 ---
 
@@ -60,5 +70,8 @@
 7. - [x] Add a bottom tab bar navigation (Plays / Stats) in place of the current top nav — standard iOS navigation pattern on mobile
 8. - [x] Add LC logo to court
 9. - [ ] Use icons instead of buttons where it makes sense to conserve space
+10. - [ ] Success toast / snackbar feedback after saving a play, creating a game, or adding a player — currently there is no visual confirmation the action succeeded
+11. - [ ] Stat tap buttons on the tracker are small and easy to miss-tap during a live game — consider larger tap targets or a compact "scoreboard" layout optimized for one-handed use on a phone
+12. - [ ] Shot chart markers should use both color AND shape to distinguish 2pt/3pt/miss (colorblind-friendly) — e.g. circle for made, X for miss already done, but 2pt vs 3pt rely on color alone
 
 ---
