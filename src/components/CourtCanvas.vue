@@ -596,6 +596,21 @@ defineExpose({ exportPng })
           </template>
         </g>
 
+        <!-- LC mark — subtle brand watermark behind diagram elements -->
+        <text
+          :x="modelValue.courtType === 'full' ? W / 2 : W / 2"
+          :y="modelValue.courtType === 'full' ? H / 2 + 8 : H * 0.82"
+          font-family="'Barlow Condensed', sans-serif"
+          font-size="36"
+          font-weight="900"
+          text-anchor="middle"
+          dominant-baseline="middle"
+          fill="#cc0000"
+          opacity="0.10"
+          pointer-events="none"
+          letter-spacing="4"
+        >LC</text>
+
         <!-- drawn elements -->
         <g v-for="el in allElements" :key="el.id">
           <path
