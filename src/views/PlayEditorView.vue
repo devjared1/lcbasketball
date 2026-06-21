@@ -167,6 +167,12 @@ async function save() {
         {{ isNew ? 'New play' : 'Edit play' }}
       </h1>
       <button
+        v-if="!isNew"
+        class="btn-ghost py-1.5 text-sm"
+        title="Print play sheet"
+        @click="router.push(`/plays/${playId}/print`)"
+      >Print</button>
+      <button
         class="btn-primary py-1.5 text-sm"
         :disabled="!form.name.trim() || saving"
         @click="save"
