@@ -21,7 +21,7 @@
 19. - [x] Play animation mode — step through multi-phase plays with transitions on the diagram
 20. - [x] Click/Touch drag to move markers on court
 21. - [x] Click/Touch edit an existing cut line on court (extend/shorten, change direction)
-22. - [ ] Auto increment player number after dropping marker
+22. - [x] Auto increment player number after dropping marker
 23. - [ ] Record final game score (our score vs. opponent score) on the Game record — currently no way to log the final result
 24. - [ ] Text annotations on play diagrams — allow coach to add a short text label anywhere on the court (e.g. "screen here", "wait for cut")
 25. - [ ] Delete individual shot events from the shot chart (tap a marker to highlight, then delete) — `deleteShot` exists in composable but no UI exposes it
@@ -39,8 +39,8 @@
 4. - [x] No client-side file-size check before video upload — very large files queue silently and may fail at the Storage level with no actionable message shown to the user
 5. - [x] The empty `watch(() => props.modelValue.courtType, () => {})` in `CourtCanvas.vue` is dead code and should be removed
 6. - [x] Saving a play does not disable the Save button during the async call — rapid double-taps can create duplicate records
-7. - [ ] `JSON.parse` on the localStorage play-order key in PlaysView has no try/catch — corrupted storage will crash the plays grid with an uncaught SyntaxError
-8. - [ ] Shot chart pending-shot overlay (`pendingScreenX/Y`) is computed at click time and not updated if the viewport is resized or device is rotated before the user taps Made/Miss — overlay can end up off-screen
+7. - [x] `JSON.parse` on the localStorage play-order key in PlaysView has no try/catch — corrupted storage will crash the plays grid with an uncaught SyntaxError
+8. - [x] Shot chart pending-shot overlay (`pendingScreenX/Y`) is computed at click time and not updated if the viewport is resized or device is rotated before the user taps Made/Miss — overlay can end up off-screen
 9. - [ ] Creating a game with an empty opponent string is not blocked — after the `.trim()` check passes an empty string, the row is inserted with `opponent: ""` and shows as a blank entry in the list
 10. - [ ] Play editor: deleting the last phase while `activePhase` is on it doesn't guard the index — `phaseDiagram` getter may reference `phases[undefined]` and render a blank canvas
 
