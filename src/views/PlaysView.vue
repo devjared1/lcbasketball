@@ -47,7 +47,10 @@ const animPlay = ref<Play | null>(null)
 
 // ---- drag-to-reorder (localStorage) ----
 const STORAGE_KEY = 'lc-plays-order'
-const customOrder = ref<string[]>(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]'))
+function loadCustomOrder(): string[] {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') } catch { return [] }
+}
+const customOrder = ref<string[]>(loadCustomOrder())
 const draggingId = ref<string | null>(null)
 
 const sortedFiltered = computed(() => {

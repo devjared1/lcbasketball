@@ -227,6 +227,9 @@ function onDrawDown(e: PointerEvent) {
       label: markerLabel.value || '•',
       team: markerTeam.value,
     } satisfies MarkerElement])
+    // Auto-increment numeric label so each successive marker gets the next number
+    const num = parseInt(markerLabel.value)
+    if (!isNaN(num)) markerLabel.value = String(num + 1)
     return
   }
 

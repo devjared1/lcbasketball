@@ -17,8 +17,6 @@ const VB_H = 470
 
 // Pending shot placement
 const pendingShot = ref<{ x: number; y: number } | null>(null)
-const pendingScreenX = ref(0)
-const pendingScreenY = ref(0)
 
 // Fetch shots when gameId changes
 watch(() => props.gameId, (id) => {
@@ -43,9 +41,6 @@ function svgToNorm(svgX: number, svgY: number) {
   return { x: svgX / VB_W, y: svgY / VB_H }
 }
 
-function normToSvg(nx: number, ny: number) {
-  return { x: nx * VB_W, y: ny * VB_H }
-}
 
 function onCourtClick(e: MouseEvent) {
   // If there's already a pending shot waiting for made/miss, clear it
@@ -61,12 +56,7 @@ function onCourtClick(e: MouseEvent) {
   const svgX = (e.clientX - rect.left) * scaleX
   const svgY = (e.clientY - rect.top) * scaleY
 
-  const norm = svgToNorm(svgX, svgY)
-  pendingShot.value = norm
-
-  // Store screen position for the overlay button placement
-  pendingScreenX.value = e.clientX - rect.left
-  pendingScreenY.value = e.clientY - rect.top
+  pendingShot.value = svgToNorm(svgX, svgY)
 }
 
 async function confirmShot(made: boolean) {
@@ -242,12 +232,13 @@ function shotColor(shot: ShotEvent): string {
       </svg>
 
       <!-- Made/Miss overlay buttons near pending shot -->
+      <!-- Position derived from normalized coords so it stays correct on resize/rotate -->
       <div
         v-if="pendingShot"
         class="absolute z-10 flex flex-col gap-1"
         :style="{
-          left: `${pendingScreenX}px`,
-          top: `${pendingScreenY}px`,
+          left: `${pendingShot.x * 100}%`,
+          top: `${pendingShot.y * 100}%`,
           transform: 'translate(-50%, -110%)',
         }"
       >
