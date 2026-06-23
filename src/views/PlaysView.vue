@@ -5,6 +5,7 @@ import type { Play } from '@/types'
 import { usePlays } from '@/composables/usePlays'
 import CourtCanvas from '@/components/CourtCanvas.vue'
 import PlayAnimator from '@/components/PlayAnimator.vue'
+import { ArrowsPointingOutIcon, DocumentDuplicateIcon, TrashIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
 const { plays, loading, error, fetchPlays, deletePlay, duplicatePlay } = usePlays()
@@ -14,7 +15,9 @@ const activeTab = ref<'playbook' | 'scouting'>('playbook')
 const search = ref('')
 
 const tabPlays = computed(() =>
-  plays.value.filter((p) => p.is_scouting === (activeTab.value === 'scouting')),
+  activeTab.value === 'playbook'
+    ? plays.value.filter((p) => !p.is_scouting)
+    : plays.value.filter((p) => p.is_scouting)
 )
 
 const filteredPlays = computed(() => {
@@ -149,7 +152,7 @@ function onDragEnd() {
         @dragend="onDragEnd"
       >
         <div class="pointer-events-none bg-court-wood">
-          <CourtCanvas :model-value="p.diagram" />
+          <CourtCanvas :model-value="p.diagram" :editable="false" :total-phases="phaseCount(p)" />
         </div>
         <div class="p-3">
           <div class="flex items-start justify-between gap-2">
@@ -166,15 +169,22 @@ function onDragEnd() {
           <p v-if="p.category" class="mt-0.5 text-xs uppercase tracking-wide text-rim">{{ p.category }}</p>
           <p v-if="p.description" class="mt-1 line-clamp-2 text-sm text-ink-500">{{ p.description }}</p>
           <div class="mt-3 flex gap-2">
-            <button class="btn-ghost grow py-1.5 text-xs" @click="router.push(`/plays/${p.id}`)">Open</button>
+            <span class="ml-auto" />
+            <button class="btn-ghost py-1.5 text-xs" @click="router.push(`/plays/${p.id}`)">
+              <ArrowsPointingOutIcon class="h-4 w-4" />
+            </button>
             <button
               v-if="phaseCount(p) > 1"
               class="btn-ghost py-1.5 text-xs"
               title="Animate phases"
               @click="animPlay = p"
             >▷</button>
-            <button class="btn-ghost py-1.5 text-xs" title="Duplicate" @click="onDuplicate(p)">Copy</button>
-            <button class="btn-danger py-1.5 text-xs" @click="onDelete(p)">Delete</button>
+            <button class="btn-ghost py-1.5 text-xs" title="Duplicate" @click="onDuplicate(p)">
+              <DocumentDuplicateIcon class="h-4 w-4" />
+            </button>
+            <button class="btn-danger py-1.5 text-xs" @click="onDelete(p)">
+              <TrashIcon class="h-4 w-4" />
+            </button>
           </div>
         </div>
       </article>

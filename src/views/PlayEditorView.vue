@@ -182,7 +182,7 @@ async function save() {
     </div>
 
     <!-- Two-column on lg (iPad landscape+): left = metadata/video, right = diagram -->
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5 pt-3">
       <!-- Left column: metadata + video clips -->
       <div class="flex flex-col gap-3 lg:w-64 lg:shrink-0">
         <div>
@@ -241,24 +241,7 @@ async function save() {
       <!-- Right column: diagram (fills remaining width) -->
       <div class="min-w-0 flex-1">
         <div class="mb-1.5 flex items-center gap-1">
-          <span class="label mb-0">Diagram</span>
-          <div class="ml-auto flex items-center gap-2">
-            <button
-              v-if="totalPhases > 1"
-              class="btn-ghost py-1 px-2.5 text-xs"
-              title="Preview animation"
-              @click="animating = true"
-            >
-              ▷ Preview
-            </button>
-            <button class="btn-ghost py-1 px-2.5 text-xs" title="Export current phase as PNG" @click="exportPng">
-              ↓ PNG
-            </button>
-          </div>
-        </div>
-
-        <!-- Phase tabs -->
-        <div class="mb-2 flex items-center gap-1 overflow-x-auto pb-0.5">
+          <!-- <span class="label mb-0">Diagram</span> -->
           <button
             v-for="i in totalPhases"
             :key="i"
@@ -289,7 +272,39 @@ async function save() {
           </button>
         </div>
 
-        <CourtCanvas ref="canvasRef" v-model="phaseDiagram" editable />
+        <!-- Phase tabs -->
+        <!-- <div class="mb-2 flex items-center gap-1 overflow-x-auto pb-0.5">
+          <button
+            v-for="i in totalPhases"
+            :key="i"
+            :class="[
+              'shrink-0 rounded px-3 py-1 text-xs font-medium transition',
+              activePhase === i - 1
+                ? 'bg-rim text-white'
+                : 'bg-ink-800 text-ink-400 hover:text-white',
+            ]"
+            @click="activePhase = i - 1"
+          >
+            Phase {{ i }}
+          </button>
+          <button
+            class="shrink-0 rounded px-3 py-1 text-xs text-ink-500 hover:text-white"
+            title="Add phase"
+            @click="addPhase"
+          >
+            + Add
+          </button>
+          <button
+            v-if="totalPhases > 1"
+            class="ml-auto shrink-0 rounded px-2 py-1 text-xs text-red-500 hover:text-red-300"
+            title="Delete current phase"
+            @click="deleteCurrentPhase"
+          >
+            Delete phase
+          </button>
+        </div> -->
+
+        <CourtCanvas ref="canvasRef" v-model="phaseDiagram" editable :total-phases="totalPhases" @is-animating="animating = $event" @export-png="exportPng" />
       </div>
     </div>
   </section>

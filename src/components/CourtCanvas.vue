@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
   ArrowElement,
   CourtType,
@@ -10,8 +10,8 @@ import type {
   Point,
 } from '@/types'
 
-const props = defineProps<{ modelValue: Diagram; editable?: boolean }>()
-const emit = defineEmits<{ 'update:modelValue': [Diagram] }>()
+const props = defineProps<{ modelValue: Diagram; editable?: boolean; totalPhases: number }>()
+const emit = defineEmits<{ 'update:modelValue': [Diagram], isAnimating: [boolean], exportPng: [] }>()
 
 type Tool = 'select' | 'pen' | 'arrow' | 'marker' | 'erase'
 const tool = ref<Tool>('select')
@@ -28,10 +28,13 @@ const KEY_HALF_W = 80
 const KEY_LENGTH = 190
 const LANE_ARC_R = 60
 const THREE_R = 237
-const THREE_CORNER_X = 36
-const THREE_ARC_Y_HALF = 159
-const THREE_ARC_X_FULL = 158
+const THREE_CORNER_X = 44
+const THREE_ARC_Y_HALF = 182
+const THREE_ARC_X_FULL = 182
 
+// Intrinsic court geometry in SVG units (10 units = 1 foot). These encode the
+// real court's aspect ratio (full 94×50 ft, half 50×47 ft) and must NOT be
+// distorted — markings below are drawn relative to W/H.
 const dims = computed(() =>
   props.modelValue.courtType === 'full'
     ? { w: 940, h: 500 }
@@ -42,6 +45,74 @@ const W = computed(() => dims.value.w)
 const H = computed(() => dims.value.h)
 
 const svgRef = ref<SVGSVGElement | null>(null)
+
+// ---------- responsive court sizing ----------
+// The rendered court fills the container as large as possible while preserving
+// its true aspect ratio (contain-fit), clamped to sensible limits so it never
+// collapses to nothing or balloons past the point of usefulness.
+const MIN_COURT_W = 280 // px — below this markers/labels become unusable
+const MAX_COURT_W = 1200 // px — beyond this we only blur the strokes
+
+const containerRef = ref<HTMLElement | null>(null)
+const containerSize = ref({ w: 0, h: 0 })
+// Height available to the court: the gap from the container's top edge down to
+// the fixed bottom nav. Driven by JS so the page never needs to scroll.
+const availableHeight = ref(0)
+
+// Fill the room between the container's top edge (below the header/toolbar) and
+// the bottom of the viewport, minus the space reserved for the fixed nav. That
+// reserved space is the <main> element's bottom padding (pb-28), so accounting
+// for it keeps the page from scrolling. Falls back to the nav's own height.
+function measureAvailableHeight() {
+  const el = containerRef.value
+  if (!el) return
+  const top = el.getBoundingClientRect().top
+  const main = el.closest('main')
+  const reserved = main
+    ? parseFloat(getComputedStyle(main).paddingBottom) || 0
+    : (document.querySelector('nav.fixed')?.getBoundingClientRect().height ?? 0)
+  availableHeight.value = Math.max(0, window.innerHeight - top - reserved - 8)
+  // if on route /plays, divide by 2 andsubtract another 112px
+  if (window.location.hash === '#/plays') {
+    availableHeight.value /= 2
+    availableHeight.value -= 112
+  }
+}
+
+let resizeObs: ResizeObserver | null = null
+onMounted(() => {
+  measureAvailableHeight()
+  // Re-measure once layout/fonts settle after first paint.
+  requestAnimationFrame(measureAvailableHeight)
+  const el = containerRef.value
+  if (el) {
+    resizeObs = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect
+      containerSize.value = { w: width, h: height }
+    })
+    resizeObs.observe(el)
+    containerSize.value = { w: el.clientWidth, h: el.clientHeight }
+  }
+  window.addEventListener('resize', measureAvailableHeight)
+})
+onBeforeUnmount(() => {
+  resizeObs?.disconnect()
+  window.removeEventListener('resize', measureAvailableHeight)
+})
+
+// Re-measure when the court type toggles (toolbar/layout above may shift).
+watch(dims, () => requestAnimationFrame(measureAvailableHeight))
+
+// Largest box with the court's aspect ratio that fits the container, clamped.
+// Null until the container is measured — template falls back to CSS sizing.
+const courtSize = computed(() => {
+  const aspect = dims.value.w / dims.value.h
+  const { w: cw, h: ch } = containerSize.value
+  if (!cw || !ch) return null
+  const fit = Math.min(cw, ch * aspect) // contain within both axes
+  const width = Math.min(Math.max(fit, MIN_COURT_W), MAX_COURT_W, cw)
+  return { width, height: width / aspect }
+})
 
 // ---------- draw state (pen / arrow tools) ----------
 const drawing = ref<DiagramElement | null>(null)
@@ -477,6 +548,7 @@ defineExpose({ exportPng })
       <!-- Row 1: tool selector + court type toggle — guaranteed single line, no overflow -->
       <div class="flex items-center gap-2">
         <div class="flex overflow-hidden rounded-md border border-ink-600">
+          <!-- Tool selector -->
           <button
             v-for="t in (['select', 'pen', 'arrow', 'marker', 'erase'] as Tool[])"
             :key="t"
@@ -486,6 +558,30 @@ defineExpose({ exportPng })
           >
             {{ t }}
           </button>
+          
+          <!-- Arrow style selector -->
+          <select v-if="tool === 'arrow'" v-model="arrowStyle" id="arrowStyle" class="px-3 py-1.5 text-xs font-semibold capitalize">
+            <option value="pass">Pass (dashed)</option>
+            <option value="cut">Cut (solid)</option>
+            <option value="dribble">Dribble (wavy)</option>
+            <option value="screen">Screen (bar)</option>
+          </select>
+          
+          <!-- Marker options -->
+          <template v-if="tool === 'marker'">
+            <select v-model="markerTeam" id="markerOptions" class="px-3 py-1.5 text-xs font-semibold capitalize mx-1">
+              <option value="home">Home (cyan)</option>
+              <option value="away">Defense (orange)</option>
+              <option value="ball">Ball</option>
+            </select>
+            <input
+              v-model="markerLabel"
+              id="markerLabel"
+              maxlength="2"
+              class="h-[29px] py-1.5 text-center text-xs mx-1"
+              aria-label="Marker label"
+            />
+          </template>
         </div>
         <div class="ml-auto flex overflow-hidden rounded-md border border-ink-600">
           <button
@@ -502,7 +598,7 @@ defineExpose({ exportPng })
 
       <!-- Row 2: context-sensitive options + action buttons (wraps on small screens) -->
       <div class="flex flex-wrap items-center gap-2">
-        <select v-if="tool === 'arrow'" v-model="arrowStyle" class="input w-auto py-1.5 text-xs">
+        <!-- <select v-if="tool === 'arrow'" v-model="arrowStyle" class="input w-auto py-1.5 text-xs">
           <option value="pass">Pass (dashed)</option>
           <option value="cut">Cut (solid)</option>
           <option value="dribble">Dribble (wavy)</option>
@@ -521,7 +617,7 @@ defineExpose({ exportPng })
             class="input w-14 py-1.5 text-center text-xs"
             aria-label="Marker label"
           />
-        </template>
+        </template> -->
 
         <label class="flex items-center gap-1 text-xs text-ink-500">
           Color
@@ -533,7 +629,7 @@ defineExpose({ exportPng })
         </label>
 
         <span class="grow" />
-        <select
+        <!-- <select
           v-if="modelValue.courtType === 'half'"
           class="input w-auto py-1.5 text-xs"
           @change="(e) => { applyTemplate((e.target as HTMLSelectElement).value as TemplateName); (e.target as HTMLSelectElement).value = '' }"
@@ -542,31 +638,48 @@ defineExpose({ exportPng })
           <option value="5out">5-Out</option>
           <option value="horns">Horns</option>
           <option value="4low">4-Low</option>
-        </select>
+        </select> -->
         <button class="btn-ghost py-1.5 text-xs" @click="undo">Undo</button>
         <button class="btn-ghost py-1.5 text-xs" @click="clearAll">Clear</button>
+        <button
+            v-if="totalPhases > 1"
+            class="btn-ghost py-1 px-2.5 text-xs"
+            title="Preview animation"
+            @click="emit('isAnimating', true)"
+          >
+            ▷ Preview
+          </button>
+          <button class="btn-ghost py-1 px-2.5 text-xs" title="Export current phase as PNG" @click="emit('exportPng')">
+            ↓ PNG
+          </button>
       </div>
     </div>
 
     <!-- hint for select mode -->
-    <p v-if="editable && tool === 'select'" class="text-[11px] text-ink-500">
+    <!-- <p v-if="editable && tool === 'select'" class="text-[11px] text-ink-500">
       Tap a marker or arrow to select · drag handles to move/resize · drag the red ● to curve an arrow
-    </p>
+    </p> -->
 
     <!-- court -->
-    <div class="overflow-hidden rounded-lg border border-ink-700 bg-court-wood">
+    <div
+      ref="containerRef"
+      class="flex items-center justify-center overflow-hidden rounded-lg border border-ink-700 bg-court-wood"
+      :style="{ height: availableHeight ? `${availableHeight}px` : 'calc(100dvh - 105px)' }"
+    >
       <svg
         ref="svgRef"
         :viewBox="viewBox"
-        class="block w-full touch-none select-none"
-        :style="{ aspectRatio: `${dims.w} / ${dims.h}`, maxHeight: 'min(70vh, 650px)', cursor: editable && (tool === 'pen' || tool === 'arrow') ? 'crosshair' : 'default' }"
+        class="block touch-none select-none"
+        :style="courtSize
+          ? { width: `${courtSize.width}px`, height: `${courtSize.height}px`, cursor: editable && (tool === 'pen' || tool === 'arrow') ? 'crosshair' : 'default' }
+          : { width: '100%', aspectRatio: `${dims.w} / ${dims.h}`, cursor: editable && (tool === 'pen' || tool === 'arrow') ? 'crosshair' : 'default' }"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
         @pointerleave="onPointerUp"
       >
         <!-- court markings -->
-        <g fill="none" stroke="#1c1614" stroke-width="3" opacity="0.85">
+        <g fill="none" stroke="#1c1614" stroke-width="2" opacity="0.85">
           <rect :x="BOUNDARY" :y="BOUNDARY" :width="W - BOUNDARY * 2" :height="H - BOUNDARY * 2" />
 
           <template v-if="modelValue.courtType === 'full'">
