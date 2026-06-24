@@ -9,6 +9,7 @@ import type {
   PenElement,
   Point,
 } from '@/types'
+import { ArrowUturnLeftIcon, TrashIcon, ArrowDownTrayIcon, PlayIcon, HandRaisedIcon, PencilIcon, ArrowUpRightIcon, UserPlusIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps<{ modelValue: Diagram; editable?: boolean; totalPhases: number }>()
 const emit = defineEmits<{ 'update:modelValue': [Diagram], isAnimating: [boolean], exportPng: [] }>()
@@ -16,7 +17,7 @@ const emit = defineEmits<{ 'update:modelValue': [Diagram], isAnimating: [boolean
 type Tool = 'select' | 'pen' | 'arrow' | 'marker' | 'erase'
 const tool = ref<Tool>('select')
 const color = ref('#000000')
-const strokeWidth = ref(3)
+const strokeWidth = ref(2)
 const arrowStyle = ref<ArrowElement['style']>('cut')
 const markerTeam = ref<MarkerElement['team']>('home')
 const markerLabel = ref('1')
@@ -301,6 +302,11 @@ function onDrawDown(e: PointerEvent) {
     // Auto-increment numeric label so each successive marker gets the next number
     const num = parseInt(markerLabel.value)
     if (!isNaN(num)) markerLabel.value = String(num + 1)
+    // Cap the marker label at 5, then swap to select mode so user can drag the last marker, reset markerLabel to 1 for next time
+    if (markerLabel.value === '6') {
+      markerLabel.value = '1'
+      tool.value = 'select'
+    }
     return
   }
 
@@ -542,128 +548,11 @@ defineExpose({ exportPng })
 </script>
 
 <template>
-  <div class="flex flex-col gap-3">
-    <!-- toolbar -->
-    <div v-if="editable" class="flex flex-col gap-1.5">
-      <!-- Row 1: tool selector + court type toggle — guaranteed single line, no overflow -->
-      <div class="flex items-center gap-2">
-        <div class="flex overflow-hidden rounded-md border border-ink-600">
-          <!-- Tool selector -->
-          <button
-            v-for="t in (['select', 'pen', 'arrow', 'marker', 'erase'] as Tool[])"
-            :key="t"
-            class="px-3 py-1.5 text-xs font-semibold capitalize"
-            :class="tool === t ? 'bg-rim text-ink-900' : 'bg-ink-800 text-chalk hover:bg-ink-700'"
-            @click="tool = t"
-          >
-            {{ t }}
-          </button>
-          
-          <!-- Arrow style selector -->
-          <select v-if="tool === 'arrow'" v-model="arrowStyle" id="arrowStyle" class="px-3 py-1.5 text-xs font-semibold capitalize">
-            <option value="pass">Pass (dashed)</option>
-            <option value="cut">Cut (solid)</option>
-            <option value="dribble">Dribble (wavy)</option>
-            <option value="screen">Screen (bar)</option>
-          </select>
-          
-          <!-- Marker options -->
-          <template v-if="tool === 'marker'">
-            <select v-model="markerTeam" id="markerOptions" class="px-3 py-1.5 text-xs font-semibold capitalize mx-1">
-              <option value="home">Home (cyan)</option>
-              <option value="away">Defense (orange)</option>
-              <option value="ball">Ball</option>
-            </select>
-            <input
-              v-model="markerLabel"
-              id="markerLabel"
-              maxlength="2"
-              class="h-[29px] py-1.5 text-center text-xs mx-1"
-              aria-label="Marker label"
-            />
-          </template>
-        </div>
-        <div class="ml-auto flex overflow-hidden rounded-md border border-ink-600">
-          <button
-            v-for="c in (['half', 'full'] as CourtType[])"
-            :key="c"
-            class="px-3 py-1.5 text-xs font-semibold capitalize"
-            :class="modelValue.courtType === c ? 'bg-home text-ink-900' : 'bg-ink-800 text-chalk hover:bg-ink-700'"
-            @click="setCourt(c)"
-          >
-            {{ c }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Row 2: context-sensitive options + action buttons (wraps on small screens) -->
-      <div class="flex flex-wrap items-center gap-2">
-        <!-- <select v-if="tool === 'arrow'" v-model="arrowStyle" class="input w-auto py-1.5 text-xs">
-          <option value="pass">Pass (dashed)</option>
-          <option value="cut">Cut (solid)</option>
-          <option value="dribble">Dribble (wavy)</option>
-          <option value="screen">Screen (bar)</option>
-        </select>
-
-        <template v-if="tool === 'marker'">
-          <select v-model="markerTeam" class="input w-auto py-1.5 text-xs">
-            <option value="home">Home (cyan)</option>
-            <option value="away">Defense (orange)</option>
-            <option value="ball">Ball</option>
-          </select>
-          <input
-            v-model="markerLabel"
-            maxlength="2"
-            class="input w-14 py-1.5 text-center text-xs"
-            aria-label="Marker label"
-          />
-        </template> -->
-
-        <label class="flex items-center gap-1 text-xs text-ink-500">
-          Color
-          <input v-model="color" type="color" class="h-7 w-8 cursor-pointer rounded border border-ink-600 bg-ink-800" />
-        </label>
-        <label class="flex items-center gap-1 text-xs text-ink-500">
-          Width
-          <input v-model.number="strokeWidth" type="range" min="1" max="8" class="w-20" />
-        </label>
-
-        <span class="grow" />
-        <!-- <select
-          v-if="modelValue.courtType === 'half'"
-          class="input w-auto py-1.5 text-xs"
-          @change="(e) => { applyTemplate((e.target as HTMLSelectElement).value as TemplateName); (e.target as HTMLSelectElement).value = '' }"
-        >
-          <option value="">Templates…</option>
-          <option value="5out">5-Out</option>
-          <option value="horns">Horns</option>
-          <option value="4low">4-Low</option>
-        </select> -->
-        <button class="btn-ghost py-1.5 text-xs" @click="undo">Undo</button>
-        <button class="btn-ghost py-1.5 text-xs" @click="clearAll">Clear</button>
-        <button
-            v-if="totalPhases > 1"
-            class="btn-ghost py-1 px-2.5 text-xs"
-            title="Preview animation"
-            @click="emit('isAnimating', true)"
-          >
-            ▷ Preview
-          </button>
-          <button class="btn-ghost py-1 px-2.5 text-xs" title="Export current phase as PNG" @click="emit('exportPng')">
-            ↓ PNG
-          </button>
-      </div>
-    </div>
-
-    <!-- hint for select mode -->
-    <!-- <p v-if="editable && tool === 'select'" class="text-[11px] text-ink-500">
-      Tap a marker or arrow to select · drag handles to move/resize · drag the red ● to curve an arrow
-    </p> -->
-
+  <div class="flex gap-3">
     <!-- court -->
     <div
       ref="containerRef"
-      class="flex items-center justify-center overflow-hidden rounded-lg border border-ink-700 bg-court-wood"
+      class="flex w-10/12 items-center justify-center overflow-hidden rounded-lg border border-ink-700 bg-court-wood"
       :style="{ height: availableHeight ? `${availableHeight}px` : 'calc(100dvh - 105px)' }"
     >
       <svg
@@ -847,6 +736,102 @@ defineExpose({ exportPng })
           </template>
         </g>
       </svg>
+    </div>
+    <!-- toolbar -->
+    <div v-if="editable" class="flex flex-col gap-1.5">
+      <!-- Row 1: tool selector + court type toggle — guaranteed single line, no overflow -->
+      <div class="flex items-center gap-1">
+        <button class="btn-ghost py-1.5 text-xs" @click="undo">
+          <ArrowUturnLeftIcon class="h-4 w-4" />
+        </button>
+        <button class="btn-ghost py-1.5 text-xs" @click="clearAll">
+          <TrashIcon class="h-4 w-4" />
+        </button>
+        <button
+          v-if="totalPhases > 1"
+          class="btn-ghost py-1.5 text-xs"
+          title="Preview animation"
+          @click="emit('isAnimating', true)"
+        >
+          <PlayIcon class="h-4 w-4" />
+        </button>
+        <button class="btn-ghost py-1.5 text-xs" title="Export current phase as PNG" @click="emit('exportPng')">
+          <ArrowDownTrayIcon class="h-4 w-4" />
+        </button>
+        <div class="ml-auto flex overflow-hidden rounded-md border border-ink-600">
+          <button
+            v-for="c in (['half', 'full'] as CourtType[])"
+            :key="c"
+            class="px-3 py-1.5 text-xs font-semibold capitalize"
+            :class="modelValue.courtType === c ? 'bg-home text-ink-900' : 'bg-ink-800 text-chalk hover:bg-ink-700'"
+            @click="setCourt(c)"
+          >
+            {{ c }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Row 2: context-sensitive options + action buttons (wraps on small screens) -->
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex overflow-hidden rounded-md">
+          <!-- Tool selector -->
+          <button
+            v-for="t in (['select', 'pen', 'arrow', 'marker', 'erase'] as Tool[])"
+            :key="t"
+            class="px-3 py-1.5 text-xs font-semibold capitalize border-l border-ink-600 first:border-l-0"
+            :class="tool === t ? 'bg-ink-500 text-ink-800' : 'bg-ink-800 text-chalk hover:bg-ink-700'"
+            @click="tool = t"
+          >
+            <HandRaisedIcon v-if="t === 'select'" class="h-4 w-4" />
+            <PencilIcon v-else-if="t === 'pen'" class="h-4 w-4" />
+            <ArrowUpRightIcon v-else-if="t === 'arrow'" class="h-4 w-4" />
+            <UserPlusIcon v-else-if="t === 'marker'" class="h-4 w-4" />
+            <TrashIcon v-else-if="t === 'erase'" class="h-4 w-4" />
+          </button>
+        </div>
+        <!-- <select
+          v-if="modelValue.courtType === 'half'"
+          class="input w-auto py-1.5 text-xs"
+          @change="(e) => { applyTemplate((e.target as HTMLSelectElement).value as TemplateName); (e.target as HTMLSelectElement).value = '' }"
+        >
+          <option value="">Templates…</option>
+          <option value="5out">5-Out</option>
+          <option value="horns">Horns</option>
+          <option value="4low">4-Low</option>
+        </select> -->
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- Arrow style selector -->
+        <select v-if="tool === 'arrow'" v-model="arrowStyle" id="arrowStyle" class="px-3 py-1.5 text-xs font-semibold capitalize rounded-md">
+          <option value="pass">Pass (dashed)</option>
+          <option value="cut">Cut (solid)</option>
+          <option value="dribble">Dribble (wavy)</option>
+          <option value="screen">Screen (bar)</option>
+        </select>
+        
+        <!-- Marker options -->
+        <template v-if="tool === 'marker'">
+          <select v-model="markerTeam" id="markerOptions" class="px-3 py-1.5 text-xs font-semibold capitalize rounded-md">
+            <option value="home">Home (cyan)</option>
+            <option value="away">Defense (orange)</option>
+            <option value="ball">Ball</option>
+          </select>
+          <input
+            v-model="markerLabel"
+            id="markerLabel"
+            maxlength="2"
+            class="h-[29px] w-1/4 py-1.5 text-center text-xs rounded-md"
+            aria-label="Marker label"
+          />
+        </template>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <input v-model="color" type="color" class="h-7 w-8 cursor-pointer rounded border border-ink-600 bg-ink-800" />
+        <label class="flex items-center gap-1 text-xs text-ink-500">
+          Width
+          <input v-model.number="strokeWidth" type="range" min="1" max="8" class="w-20" />
+        </label>
+      </div>
     </div>
   </div>
 </template>

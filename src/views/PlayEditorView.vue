@@ -7,6 +7,7 @@ import { useStats } from '@/composables/useStats'
 import CourtCanvas from '@/components/CourtCanvas.vue'
 import PlayAnimator from '@/components/PlayAnimator.vue'
 import VideoUploader from '@/components/VideoUploader.vue'
+import { PlusIcon, TrashIcon } from '@heroicons/vue/24/outline'
 
 const route = useRoute()
 const router = useRouter()
@@ -256,19 +257,19 @@ async function save() {
             Phase {{ i }}
           </button>
           <button
-            class="shrink-0 rounded px-3 py-1 text-xs text-ink-500 hover:text-white"
+            class="shrink-0 rounded p-1 text-xs text-ink-500 hover:text-white"
             title="Add phase"
             @click="addPhase"
           >
-            + Add
+            <PlusIcon class="h-4 w-4" />
           </button>
           <button
             v-if="totalPhases > 1"
-            class="ml-auto shrink-0 rounded px-2 py-1 text-xs text-red-500 hover:text-red-300"
+            class="shrink-0 rounded p-1 -ml-2 text-xs text-red-500 hover:text-red-300"
             title="Delete current phase"
             @click="deleteCurrentPhase"
           >
-            Delete phase
+            <TrashIcon class="h-4 w-4" />
           </button>
         </div>
 
