@@ -54,7 +54,7 @@ onMounted(async () => {
       </header>
 
       <div class="court-diagram mx-auto max-w-lg">
-        <CourtCanvas :model-value="phase" />
+        <CourtCanvas :model-value="phase" :total-phases="allPhases.length" />
       </div>
 
       <div v-if="play.description && idx === 0" class="mt-6 rounded border border-gray-300 p-4">

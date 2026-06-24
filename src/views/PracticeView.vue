@@ -216,7 +216,7 @@ const availablePlays = computed(() =>
                 @click="addPlayToPlan(p.id)"
               >
                 <div class="pointer-events-none h-12 w-16 shrink-0 overflow-hidden rounded border border-ink-700 bg-court-wood">
-                  <CourtCanvas :model-value="p.diagram" />
+                  <CourtCanvas :model-value="p.diagram" :total-phases="1 + (p.diagram.phases?.length ?? 0)" />
                 </div>
                 <div class="min-w-0">
                   <p class="font-semibold leading-tight">{{ p.name }}</p>

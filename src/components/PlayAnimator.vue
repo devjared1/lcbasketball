@@ -79,7 +79,7 @@ onUnmounted(stopTimer)
       <!-- court -->
       <div class="flex min-h-0 flex-1 items-center justify-center">
         <div class="w-full max-w-2xl">
-          <CourtCanvas :model-value="displayDiagram" />
+          <CourtCanvas :model-value="displayDiagram" :total-phases="totalPhases" />
         </div>
       </div>
 
