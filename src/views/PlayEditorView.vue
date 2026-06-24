@@ -185,7 +185,7 @@ async function save() {
     <!-- Two-column on lg (iPad landscape+): left = metadata/video, right = diagram -->
     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-5 pt-3">
       <!-- Left column: metadata + video clips -->
-      <div class="flex flex-col gap-3 lg:w-64 lg:shrink-0">
+      <div class="order-last lg:order-first flex flex-col gap-3 lg:w-64 lg:shrink-0">
         <div>
           <label class="label" for="pe-name">Name</label>
           <input
@@ -240,7 +240,7 @@ async function save() {
       </div>
 
       <!-- Right column: diagram (fills remaining width) -->
-      <div class="min-w-0 flex-1">
+      <div class="order-first lg:order-last min-w-0 flex-1">
         <div class="mb-1.5 flex items-center gap-1">
           <!-- <span class="label mb-0">Diagram</span> -->
           <button

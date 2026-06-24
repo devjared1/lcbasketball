@@ -72,12 +72,10 @@ function measureAvailableHeight() {
   const reserved = main
     ? parseFloat(getComputedStyle(main).paddingBottom) || 0
     : (document.querySelector('nav.fixed')?.getBoundingClientRect().height ?? 0)
-  availableHeight.value = Math.max(0, window.innerHeight - top - reserved - 8)
-  // if on route /plays, divide by 2 andsubtract another 112px
-  if (window.location.hash === '#/plays') {
-    availableHeight.value /= 2
-    availableHeight.value -= 112
-  }
+  // Subtract bottom toolbar height (tool strip ~60px + optional context row ~44px)
+  const hasContextRow = (tool.value === 'arrow' || tool.value === 'marker') && props.editable
+  const bottomH = 60 + (hasContextRow ? 44 : 0)
+  availableHeight.value = Math.max(0, window.innerHeight - top - reserved - 8 - bottomH)
 }
 
 let resizeObs: ResizeObserver | null = null
@@ -130,6 +128,7 @@ watch(tool, () => {
   selectedId.value = null
   dragKind.value = null
   dragLive.value = null
+  if (props.editable) requestAnimationFrame(measureAvailableHeight)
 })
 
 // ---------- shared helpers ----------
@@ -548,19 +547,63 @@ defineExpose({ exportPng })
 </script>
 
 <template>
-  <div class="flex gap-3">
-    <!-- court -->
+  <div :class="editable ? 'flex flex-col gap-2' : ''">
+
+    <!-- ── TOP TOOLBAR (editable only) ── -->
+    <div v-if="editable" class="flex items-center gap-1.5">
+      <button
+        class="rounded-lg border border-ink-700 bg-ink-800 p-2 text-chalk hover:bg-ink-700 active:bg-ink-600"
+        title="Undo"
+        @click="undo"
+      >
+        <ArrowUturnLeftIcon class="h-5 w-5" />
+      </button>
+      <button
+        class="rounded-lg border border-ink-700 bg-ink-800 p-2 text-chalk hover:bg-ink-700 active:bg-ink-600"
+        title="Clear all"
+        @click="clearAll"
+      >
+        <TrashIcon class="h-5 w-5" />
+      </button>
+      <button
+        class="rounded-lg border border-ink-700 bg-ink-800 p-2 text-chalk hover:bg-ink-700 active:bg-ink-600"
+        title="Export PNG"
+        @click="emit('exportPng')"
+      >
+        <ArrowDownTrayIcon class="h-5 w-5" />
+      </button>
+      <button
+        v-if="totalPhases > 1"
+        class="rounded-lg border border-ink-700 bg-ink-800 p-2 text-chalk hover:bg-ink-700 active:bg-ink-600"
+        title="Preview animation"
+        @click="emit('isAnimating', true)"
+      >
+        <PlayIcon class="h-5 w-5" />
+      </button>
+      <!-- Half / Full court toggle -->
+      <div class="ml-auto flex overflow-hidden rounded-lg border border-ink-600">
+        <button
+          v-for="c in (['half', 'full'] as CourtType[])"
+          :key="c"
+          class="px-4 py-2 text-xs font-semibold capitalize transition"
+          :class="modelValue.courtType === c ? 'bg-home text-ink-900' : 'bg-ink-800 text-chalk hover:bg-ink-700'"
+          @click="setCourt(c)"
+        >{{ c }}</button>
+      </div>
+    </div>
+
+    <!-- ── COURT ── -->
     <div
       ref="containerRef"
-      class="flex w-10/12 items-center justify-center overflow-hidden rounded-lg border border-ink-700 bg-court-wood"
-      :style="{ height: availableHeight ? `${availableHeight}px` : 'calc(100dvh - 105px)' }"
+      class="flex w-full items-center justify-center overflow-hidden rounded-lg border border-ink-700 bg-court-wood"
+      :style="editable && availableHeight ? { height: `${availableHeight}px` } : {}"
     >
       <svg
         ref="svgRef"
         :viewBox="viewBox"
         class="block touch-none select-none"
-        :style="courtSize
-          ? { width: `${courtSize.width}px`, height: `${courtSize.height}px`, cursor: editable && (tool === 'pen' || tool === 'arrow') ? 'crosshair' : 'default' }
+        :style="editable && courtSize
+          ? { width: `${courtSize.width}px`, height: `${courtSize.height}px`, cursor: (tool === 'pen' || tool === 'arrow') ? 'crosshair' : 'default' }
           : { width: '100%', aspectRatio: `${dims.w} / ${dims.h}`, cursor: editable && (tool === 'pen' || tool === 'arrow') ? 'crosshair' : 'default' }"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
@@ -737,101 +780,59 @@ defineExpose({ exportPng })
         </g>
       </svg>
     </div>
-    <!-- toolbar -->
-    <div v-if="editable" class="flex flex-col gap-1.5">
-      <!-- Row 1: tool selector + court type toggle — guaranteed single line, no overflow -->
-      <div class="flex items-center gap-1">
-        <button class="btn-ghost py-1.5 text-xs" @click="undo">
-          <ArrowUturnLeftIcon class="h-4 w-4" />
-        </button>
-        <button class="btn-ghost py-1.5 text-xs" @click="clearAll">
-          <TrashIcon class="h-4 w-4" />
-        </button>
+
+    <!-- ── BOTTOM TOOLBAR (editable only) ── -->
+    <div v-if="editable" class="flex flex-col gap-2">
+      <!-- Tool selector strip -->
+      <div class="flex gap-1 rounded-2xl bg-ink-800 p-1.5">
         <button
-          v-if="totalPhases > 1"
-          class="btn-ghost py-1.5 text-xs"
-          title="Preview animation"
-          @click="emit('isAnimating', true)"
+          v-for="t in (['select', 'pen', 'arrow', 'marker', 'erase'] as Tool[])"
+          :key="t"
+          class="flex flex-1 items-center justify-center rounded-xl py-2.5 transition"
+          :class="tool === t ? 'bg-ink-600 text-chalk shadow-sm' : 'text-ink-400 hover:text-chalk'"
+          :title="t"
+          @click="tool = t"
         >
-          <PlayIcon class="h-4 w-4" />
+          <HandRaisedIcon v-if="t === 'select'" class="h-5 w-5" />
+          <PencilIcon v-else-if="t === 'pen'" class="h-5 w-5" />
+          <ArrowUpRightIcon v-else-if="t === 'arrow'" class="h-5 w-5" />
+          <UserPlusIcon v-else-if="t === 'marker'" class="h-5 w-5" />
+          <TrashIcon v-else-if="t === 'erase'" class="h-5 w-5" />
         </button>
-        <button class="btn-ghost py-1.5 text-xs" title="Export current phase as PNG" @click="emit('exportPng')">
-          <ArrowDownTrayIcon class="h-4 w-4" />
-        </button>
-        <div class="ml-auto flex overflow-hidden rounded-md border border-ink-600">
-          <button
-            v-for="c in (['half', 'full'] as CourtType[])"
-            :key="c"
-            class="px-3 py-1.5 text-xs font-semibold capitalize"
-            :class="modelValue.courtType === c ? 'bg-home text-ink-900' : 'bg-ink-800 text-chalk hover:bg-ink-700'"
-            @click="setCourt(c)"
-          >
-            {{ c }}
-          </button>
-        </div>
       </div>
 
-      <!-- Row 2: context-sensitive options + action buttons (wraps on small screens) -->
-      <div class="flex flex-wrap items-center gap-2">
-        <div class="flex overflow-hidden rounded-md">
-          <!-- Tool selector -->
-          <button
-            v-for="t in (['select', 'pen', 'arrow', 'marker', 'erase'] as Tool[])"
-            :key="t"
-            class="px-3 py-1.5 text-xs font-semibold capitalize border-l border-ink-600 first:border-l-0"
-            :class="tool === t ? 'bg-ink-500 text-ink-800' : 'bg-ink-800 text-chalk hover:bg-ink-700'"
-            @click="tool = t"
-          >
-            <HandRaisedIcon v-if="t === 'select'" class="h-4 w-4" />
-            <PencilIcon v-else-if="t === 'pen'" class="h-4 w-4" />
-            <ArrowUpRightIcon v-else-if="t === 'arrow'" class="h-4 w-4" />
-            <UserPlusIcon v-else-if="t === 'marker'" class="h-4 w-4" />
-            <TrashIcon v-else-if="t === 'erase'" class="h-4 w-4" />
-          </button>
-        </div>
-        <!-- <select
-          v-if="modelValue.courtType === 'half'"
-          class="input w-auto py-1.5 text-xs"
-          @change="(e) => { applyTemplate((e.target as HTMLSelectElement).value as TemplateName); (e.target as HTMLSelectElement).value = '' }"
-        >
-          <option value="">Templates…</option>
-          <option value="5out">5-Out</option>
-          <option value="horns">Horns</option>
-          <option value="4low">4-Low</option>
-        </select> -->
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <!-- Arrow style selector -->
-        <select v-if="tool === 'arrow'" v-model="arrowStyle" id="arrowStyle" class="px-3 py-1.5 text-xs font-semibold capitalize rounded-md">
+      <!-- Context-sensitive options (arrow style, marker team/label, color) -->
+      <div v-if="tool === 'arrow' || tool === 'marker'" class="flex items-center gap-2">
+        <select v-if="tool === 'arrow'" v-model="arrowStyle" class="input flex-1 py-1.5 text-xs">
           <option value="pass">Pass (dashed)</option>
           <option value="cut">Cut (solid)</option>
           <option value="dribble">Dribble (wavy)</option>
           <option value="screen">Screen (bar)</option>
         </select>
-        
-        <!-- Marker options -->
         <template v-if="tool === 'marker'">
-          <select v-model="markerTeam" id="markerOptions" class="px-3 py-1.5 text-xs font-semibold capitalize rounded-md">
-            <option value="home">Home (cyan)</option>
-            <option value="away">Defense (orange)</option>
+          <select v-model="markerTeam" class="input flex-1 py-1.5 text-xs">
+            <option value="home">Home</option>
+            <option value="away">Defense</option>
             <option value="ball">Ball</option>
           </select>
           <input
             v-model="markerLabel"
-            id="markerLabel"
             maxlength="2"
-            class="h-[29px] w-1/4 py-1.5 text-center text-xs rounded-md"
+            class="input w-14 py-1.5 text-center text-xs"
             aria-label="Marker label"
           />
         </template>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <input v-model="color" type="color" class="h-7 w-8 cursor-pointer rounded border border-ink-600 bg-ink-800" />
-        <label class="flex items-center gap-1 text-xs text-ink-500">
-          Width
-          <input v-model.number="strokeWidth" type="range" min="1" max="8" class="w-20" />
+        <input
+          v-model="color"
+          type="color"
+          class="h-8 w-8 shrink-0 cursor-pointer rounded border border-ink-600 bg-ink-800"
+          title="Color"
+        />
+        <label class="flex shrink-0 items-center gap-1 text-xs text-ink-500">
+          <input v-model.number="strokeWidth" type="range" min="1" max="8" class="w-16" />
         </label>
       </div>
     </div>
+
   </div>
 </template>
