@@ -72,10 +72,18 @@ function measureAvailableHeight() {
   const reserved = main
     ? parseFloat(getComputedStyle(main).paddingBottom) || 0
     : (document.querySelector('nav.fixed')?.getBoundingClientRect().height ?? 0)
-  // Subtract bottom toolbar height (tool strip ~60px + optional context row ~44px)
-  const hasContextRow = (tool.value === 'arrow' || tool.value === 'marker') && props.editable
-  const bottomH = 60 + (hasContextRow ? 44 : 0)
+  // Subtract bottom toolbar height (tool strip ~60px)
+  const bottomH = 60
   availableHeight.value = Math.max(0, window.innerHeight - top - reserved - 8 - bottomH)
+  // if on route /plays, adjust the available height to be 2/3 of the available height for desktop and 3/4 for mobile, minus 112px
+  if (window.location.hash === '#/plays') {
+    if (window.innerWidth >= 768) {
+      availableHeight.value = (2/3) * availableHeight.value
+    } else {
+      availableHeight.value = (3/4) * availableHeight.value
+    }
+    availableHeight.value -= 112
+  }
 }
 
 let resizeObs: ResizeObserver | null = null
@@ -372,33 +380,55 @@ function onPointerUp() {
 }
 
 function clearAll() { commit([]) }
-function undo() { commit(elements.value.slice(0, -1)) }
+function undo() { 
+  commit(elements.value.slice(0, -1))
+  // decrement marker label if last element was a marker
+  const lastElement = elements.value[elements.value.length - 1]
+  if (lastElement && lastElement.type === 'marker') {
+    const num = parseInt(markerLabel.value)
+    if (!isNaN(num)) markerLabel.value = String(num - 1)
+  }
+}
 
 // ---------- Quick-start templates ----------
-type TemplateName = '5out' | 'horns' | '4low'
+type TemplateName = '3out' | '4out' | '4high' |  'horns' | '5out'
 
-const TEMPLATES: Record<TemplateName, { x: number; y: number; label: string }[]> = {
-  '5out': [
-    { x: 0.50, y: 0.72, label: '1' },
-    { x: 0.22, y: 0.60, label: '2' },
-    { x: 0.78, y: 0.60, label: '3' },
-    { x: 0.10, y: 0.36, label: '4' },
-    { x: 0.90, y: 0.36, label: '5' },
+const TEMPLATES: Record<TemplateName, { x: number; y: number; label: string; type: 'home' | 'away' | 'ball' }[]> = {
+  '3out': [
+    { x: 0.50, y: 0.78, label: '1', type: 'ball' },
+    { x: 0.12, y: 0.50, label: '2', type: 'home' },
+    { x: 0.88, y: 0.50, label: '3', type: 'home' },
+    { x: 0.33, y: 0.16, label: '4', type: 'home' },
+    { x: 0.67, y: 0.16, label: '5', type: 'home' },
+  ],
+  '4out': [
+    { x: 0.50, y: 0.78, label: '1', type: 'ball' },
+    { x: 0.12, y: 0.50, label: '2', type: 'home' },
+    { x: 0.88, y: 0.50, label: '3', type: 'home' },
+    { x: 0.07, y: 0.16, label: '4', type: 'home' },
+    { x: 0.67, y: 0.16, label: '5', type: 'home' },
+  ],
+  '4high': [
+    { x: 0.50, y: 0.78, label: '1', type: 'ball' },
+    { x: 0.12, y: 0.50, label: '2', type: 'home' },
+    { x: 0.88, y: 0.50, label: '3', type: 'home' },
+    { x: 0.33, y: 0.50, label: '4', type: 'home' },
+    { x: 0.67, y: 0.50, label: '5', type: 'home' },
   ],
   horns: [
-    { x: 0.50, y: 0.72, label: '1' },
-    { x: 0.33, y: 0.47, label: '2' },
-    { x: 0.67, y: 0.47, label: '3' },
-    { x: 0.18, y: 0.64, label: '4' },
-    { x: 0.82, y: 0.64, label: '5' },
+    { x: 0.50, y: 0.78, label: '1', type: 'ball' },
+    { x: 0.07, y: 0.16, label: '2', type: 'home' },
+    { x: 0.93, y: 0.16, label: '3', type: 'home' },
+    { x: 0.33, y: 0.57, label: '4', type: 'home' },
+    { x: 0.67, y: 0.57, label: '5', type: 'home' },
   ],
-  '4low': [
-    { x: 0.50, y: 0.78, label: '1' },
-    { x: 0.36, y: 0.47, label: '2' },
-    { x: 0.64, y: 0.47, label: '3' },
-    { x: 0.38, y: 0.28, label: '4' },
-    { x: 0.62, y: 0.28, label: '5' },
-  ],
+  '5out': [
+    { x: 0.50, y: 0.78, label: '1', type: 'ball' },
+    { x: 0.12, y: 0.50, label: '2', type: 'home' },
+    { x: 0.88, y: 0.50, label: '3', type: 'home' },
+    { x: 0.07, y: 0.16, label: '4', type: 'home' },
+    { x: 0.93, y: 0.16, label: '5', type: 'home' },
+  ]
 }
 
 function applyTemplate(name: TemplateName) {
@@ -413,8 +443,16 @@ function applyTemplate(name: TemplateName) {
     width: 3,
     at: { x: pos.x, y: pos.y },
     label: pos.label,
-    team: 'home' as const,
+    team: pos.type,
   })))
+}
+
+// Apply the chosen template, then reset the select back to its placeholder
+function onTemplateSelect(e: Event) {
+  const select = e.target as HTMLSelectElement
+  const name = select.value as TemplateName
+  if (name) applyTemplate(name)
+  select.value = ''
 }
 
 // ---------- rendering helpers ----------
@@ -443,21 +481,27 @@ function dribblePath(el: ArrowElement): string {
 
   if (!el.control) {
     const len = Math.hypot(bx - ax, by - ay)
-    const segs = Math.max(4, Math.floor(len / 16))
     const nx = (by - ay) / (len || 1), ny = -(bx - ax) / (len || 1)
+    // Whole number of wave cycles so the wave returns to the line at both ends
+    const cycles = Math.max(2, Math.round(len / 32))
+    // Subdivide each cycle finely so the polyline reads as a smooth curve
+    const segs = cycles * 12
     let d = `M ${ax} ${ay}`
-    for (let i = 1; i < segs; i++) {
+    for (let i = 1; i <= segs; i++) {
       const t = i / segs
-      const off = i % 2 === 0 ? amp : -amp
+      const off = amp * Math.sin(t * cycles * 2 * Math.PI)
       d += ` L ${ax + (bx - ax) * t + nx * off} ${ay + (by - ay) * t + ny * off}`
     }
-    return d + ` L ${bx} ${by}`
+    return d
   }
 
-  // Curved dribble: zigzag along the quadratic bezier
+  // Curved dribble: smooth sine wave riding the quadratic bezier
   const cx = el.control.x * W.value, cy = el.control.y * H.value
   const approxLen = Math.hypot(cx - ax, cy - ay) + Math.hypot(bx - cx, by - cy)
-  const segs = Math.max(4, Math.floor(approxLen / 16))
+  // Whole number of wave cycles so the wave returns to the path at both ends
+  const cycles = Math.max(2, Math.round(approxLen / 32))
+  // Subdivide each cycle finely so the polyline reads as a smooth curve
+  const segs = cycles * 12
   let d = `M ${ax} ${ay}`
   for (let i = 1; i <= segs; i++) {
     const t = i / segs, mt = 1 - t
@@ -468,25 +512,29 @@ function dribblePath(el: ArrowElement): string {
     const dty = 2 * mt * (cy - ay) + 2 * t * (by - cy)
     const dtLen = Math.hypot(dtx, dty) || 1
     const nx = dty / dtLen, ny = -dtx / dtLen
-    const off = i % 2 === 0 ? amp : -amp
-    d += i < segs
-      ? ` L ${px + nx * off} ${py + ny * off}`
-      : ` L ${px} ${py}`
+    const off = amp * Math.sin(t * cycles * 2 * Math.PI)
+    d += ` L ${px + nx * off} ${py + ny * off}`
   }
   return d
 }
 
-// Arrowhead triangle at the tip; uses control→head direction when curved
+// Arrowhead triangle centered on the head; tip points in the line direction
 function arrowHead(el: ArrowElement): string {
   const bx = el.points[1].x * W.value, by = el.points[1].y * H.value
   const from = el.control ?? el.points[0]
   const ax = from.x * W.value, ay = from.y * H.value
   const ang = Math.atan2(by - ay, bx - ax)
-  const size = 14
+  const dx = Math.cos(ang), dy = Math.sin(ang)
+  const size = 18
+  // Tip is `size` from base; shift so the triangle's centroid sits on (bx, by).
+  // Centroid lies size/3 behind the tip along the axis, so push the tip forward by that much.
+  const axialLen = size * Math.cos(Math.PI / 6)
+  const shift = (2 / 3) * axialLen
+  const tx = bx + shift * dx, ty = by + shift * dy
   return [
-    `${bx},${by}`,
-    `${bx - size * Math.cos(ang - Math.PI / 6)},${by - size * Math.sin(ang - Math.PI / 6)}`,
-    `${bx - size * Math.cos(ang + Math.PI / 6)},${by - size * Math.sin(ang + Math.PI / 6)}`,
+    `${tx},${ty}`,
+    `${tx - size * Math.cos(ang - Math.PI / 6)},${ty - size * Math.sin(ang - Math.PI / 6)}`,
+    `${tx - size * Math.cos(ang + Math.PI / 6)},${ty - size * Math.sin(ang + Math.PI / 6)}`,
   ].join(' ')
 }
 
@@ -512,7 +560,7 @@ const allElements = computed<DiagramElement[]>(() => {
   return base.map((el) => (el.id === dragLive.value!.id ? dragLive.value! : el))
 })
 
-const teamColor = { home: '#37b6c4', away: '#e8743b', ball: '#e7c993' } as const
+const teamColor = { home: '#cc0000', away: '#e8743b', ball: '#e7c993' } as const
 
 // ---------- PNG export ----------
 function exportPng(filename = 'play.png') {
@@ -580,6 +628,51 @@ defineExpose({ exportPng })
       >
         <PlayIcon class="h-5 w-5" />
       </button>
+      <!-- Quick-start marker templates -->
+      <select
+        class="input !w-32 py-1 text-xs"
+        title="Insert a quick-start formation"
+        @change="onTemplateSelect"
+      >
+        <option value="" selected>Template…</option>
+        <option value="3out">3-Out</option>
+        <option value="4out">4-Out</option>
+        <option value="4high">4-High</option>
+        <option value="horns">Horns</option>
+        <option value="5out">5-Out</option>
+        
+      </select>
+      <!-- Context-sensitive options (arrow style, marker team/label, color) -->
+      <div v-if="tool === 'arrow' || tool === 'marker'" class="mx-auto h-[38px] flex items-center gap-2">
+        <select v-if="tool === 'arrow'" v-model="arrowStyle" class="input !w-36 flex-1 py-1 text-xs">
+          <option value="pass">Pass (dashed)</option>
+          <option value="cut">Cut (solid)</option>
+          <option value="dribble">Dribble (wavy)</option>
+          <option value="screen">Screen (bar)</option>
+        </select>
+        <template v-if="tool === 'marker'">
+          <select v-model="markerTeam" class="input !w-36 flex-1 py-1.5 text-xs">
+            <option value="home">Home</option>
+            <option value="away">Defense</option>
+            <option value="ball">Ball</option>
+          </select>
+          <input
+            v-model="markerLabel"
+            maxlength="2"
+            class="input !w-16 py-1.5 text-center text-xs"
+            aria-label="Marker label"
+          />
+        </template>
+        <input
+          v-model="color"
+          type="color"
+          class="h-8 w-8 shrink-0 cursor-pointer rounded border border-ink-600 bg-ink-800"
+          title="Color"
+        />
+        <label class="flex shrink-0 items-center gap-1 text-xs text-ink-500">
+          <input v-model.number="strokeWidth" type="range" min="1" max="8" class="w-16" />
+        </label>
+      </div>
       <!-- Half / Full court toggle -->
       <div class="ml-auto flex overflow-hidden rounded-lg border border-ink-600">
         <button
@@ -596,7 +689,7 @@ defineExpose({ exportPng })
     <div
       ref="containerRef"
       class="flex w-full items-center justify-center overflow-hidden rounded-lg border border-ink-700 bg-court-wood"
-      :style="editable && availableHeight ? { height: `${availableHeight}px` } : {}"
+      :style="editable && availableHeight ? { height: `${availableHeight}px` } : { height: `${availableHeight}px`}"
     >
       <svg
         ref="svgRef"
@@ -711,8 +804,8 @@ defineExpose({ exportPng })
               :cx="el.at.x * W"
               :cy="el.at.y * H"
               r="16"
-              :fill="teamColor[el.team]"
-              stroke="#0d0f13"
+              fill="transparent"
+              :stroke="`${el.team === 'ball' ? '#0d0f13' : ''}`"
               stroke-width="2"
             />
             <text
@@ -723,7 +816,7 @@ defineExpose({ exportPng })
               font-size="18"
               font-weight="700"
               font-family="Inter, system-ui, sans-serif"
-              fill="#0d0f13"
+              fill="#000000"
             >
               {{ el.label }}
             </text>
@@ -799,38 +892,6 @@ defineExpose({ exportPng })
           <UserPlusIcon v-else-if="t === 'marker'" class="h-5 w-5" />
           <TrashIcon v-else-if="t === 'erase'" class="h-5 w-5" />
         </button>
-      </div>
-
-      <!-- Context-sensitive options (arrow style, marker team/label, color) -->
-      <div v-if="tool === 'arrow' || tool === 'marker'" class="flex items-center gap-2">
-        <select v-if="tool === 'arrow'" v-model="arrowStyle" class="input flex-1 py-1.5 text-xs">
-          <option value="pass">Pass (dashed)</option>
-          <option value="cut">Cut (solid)</option>
-          <option value="dribble">Dribble (wavy)</option>
-          <option value="screen">Screen (bar)</option>
-        </select>
-        <template v-if="tool === 'marker'">
-          <select v-model="markerTeam" class="input flex-1 py-1.5 text-xs">
-            <option value="home">Home</option>
-            <option value="away">Defense</option>
-            <option value="ball">Ball</option>
-          </select>
-          <input
-            v-model="markerLabel"
-            maxlength="2"
-            class="input w-14 py-1.5 text-center text-xs"
-            aria-label="Marker label"
-          />
-        </template>
-        <input
-          v-model="color"
-          type="color"
-          class="h-8 w-8 shrink-0 cursor-pointer rounded border border-ink-600 bg-ink-800"
-          title="Color"
-        />
-        <label class="flex shrink-0 items-center gap-1 text-xs text-ink-500">
-          <input v-model.number="strokeWidth" type="range" min="1" max="8" class="w-16" />
-        </label>
       </div>
     </div>
 

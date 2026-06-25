@@ -295,38 +295,6 @@ async function save() {
           </button>
         </div>
 
-        <!-- Phase tabs -->
-        <!-- <div class="mb-2 flex items-center gap-1 overflow-x-auto pb-0.5">
-          <button
-            v-for="i in totalPhases"
-            :key="i"
-            :class="[
-              'shrink-0 rounded px-3 py-1 text-xs font-medium transition',
-              activePhase === i - 1
-                ? 'bg-rim text-white'
-                : 'bg-ink-800 text-ink-400 hover:text-white',
-            ]"
-            @click="activePhase = i - 1"
-          >
-            Phase {{ i }}
-          </button>
-          <button
-            class="shrink-0 rounded px-3 py-1 text-xs text-ink-500 hover:text-white"
-            title="Add phase"
-            @click="addPhase"
-          >
-            + Add
-          </button>
-          <button
-            v-if="totalPhases > 1"
-            class="ml-auto shrink-0 rounded px-2 py-1 text-xs text-red-500 hover:text-red-300"
-            title="Delete current phase"
-            @click="deleteCurrentPhase"
-          >
-            Delete phase
-          </button>
-        </div> -->
-
         <CourtCanvas ref="canvasRef" v-model="phaseDiagram" editable :total-phases="totalPhases" @is-animating="animating = $event" @export-png="exportPng" />
       </div>
     </div>
