@@ -96,7 +96,7 @@ function onDragEnd() {
         <h1 class="font-stencil text-2xl font-extrabold tracking-tight">Playbook</h1>
         <p class="text-sm text-ink-500">Diagram sets, attach film, run it back.</p>
       </div>
-      <button class="btn-primary" @click="router.push('/plays/new')">+ New play</button>
+      <button class="btn-primary capitalize" @click="router.push('/plays/new')">+ New play</button>
     </header>
 
     <!-- Playbook / Scouting tabs -->

@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
-import { BookOpenIcon, ChartBarIcon, ClipboardDocumentListIcon } from '@heroicons/vue/24/outline'
-import { BookOpenIcon as BookOpenSolid, ChartBarIcon as ChartBarSolid, ClipboardDocumentListIcon as ClipboardSolid } from '@heroicons/vue/24/solid'
+import { BookOpenIcon, ChartBarIcon, ClipboardIcon, ClipboardDocumentListIcon } from '@heroicons/vue/24/outline'
+import { BookOpenIcon as BookOpenSolid, ChartBarIcon as ChartBarSolid, ClipboardIcon as ClipboardSolid } from '@heroicons/vue/24/solid'
 import { isSupabaseConfigured } from '@/lib/supabase'
 
 const route = useRoute()
 
 const tabs = [
+  { to: '/whiteboard', label: 'Whiteboard', outline: ClipboardIcon, solid: ClipboardSolid },
   { to: '/plays', label: 'Plays', outline: BookOpenIcon, solid: BookOpenSolid },
   { to: '/stats', label: 'Stats', outline: ChartBarIcon, solid: ChartBarSolid },
-  { to: '/practice', label: 'Practice', outline: ClipboardDocumentListIcon, solid: ClipboardSolid },
+  // { to: '/practice', label: 'Practice', outline: ClipboardDocumentListIcon, solid: ClipboardSolid },
 ]
 </script>
 

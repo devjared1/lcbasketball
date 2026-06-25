@@ -4,6 +4,7 @@ import StatsView from '@/views/StatsView.vue'
 import PlayEditorView from '@/views/PlayEditorView.vue'
 import PrintPlayView from '@/views/PrintPlayView.vue'
 import PracticeView from '@/views/PracticeView.vue'
+import WhiteboardView from '@/views/WhiteboardView.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -15,5 +16,6 @@ export const router = createRouter({
     { path: '/plays/:id', name: 'play-edit', component: PlayEditorView },
     { path: '/stats', name: 'stats', component: StatsView },
     { path: '/practice', name: 'practice', component: PracticeView },
+    { path: '/whiteboard', name: 'whiteboard', component: WhiteboardView },
   ],
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { capitalize, computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
   ArrowElement,
   CourtType,
@@ -11,11 +11,12 @@ import type {
 } from '@/types'
 import { ArrowUturnLeftIcon, TrashIcon, ArrowDownTrayIcon, PlayIcon, HandRaisedIcon, PencilIcon, ArrowUpRightIcon, UserPlusIcon } from '@heroicons/vue/24/outline';
 
-const props = defineProps<{ modelValue: Diagram; editable?: boolean; totalPhases: number }>()
+// add optional prop for whiteboard view, use pen tool only
+const props = defineProps<{ modelValue: Diagram; editable?: boolean; totalPhases: number; tool?: Tool }>()
 const emit = defineEmits<{ 'update:modelValue': [Diagram], isAnimating: [boolean], exportPng: [] }>()
 
-type Tool = 'select' | 'pen' | 'arrow' | 'marker' | 'erase'
-const tool = ref<Tool>('select')
+type Tool = 'select' | 'pen' | 'arrow' | 'marker' | 'erase' | 'undo'
+const tool = ref<Tool>(props.tool || 'select')
 const color = ref('#000000')
 const strokeWidth = ref(2)
 const arrowStyle = ref<ArrowElement['style']>('cut')
@@ -44,6 +45,11 @@ const dims = computed(() =>
 const viewBox = computed(() => `0 0 ${dims.value.w} ${dims.value.h}`)
 const W = computed(() => dims.value.w)
 const H = computed(() => dims.value.h)
+
+// LC brand watermark (centered, subtle). Width in SVG units; aspect ≈ logo's.
+const logoUrl = `${import.meta.env.BASE_URL}/public/LCLogo.png`
+const LOGO_ASPECT = 343 / 305
+const WATERMARK_W = 150
 
 const svgRef = ref<SVGSVGElement | null>(null)
 
@@ -101,6 +107,9 @@ onMounted(() => {
     containerSize.value = { w: el.clientWidth, h: el.clientHeight }
   }
   window.addEventListener('resize', measureAvailableHeight)
+  
+  // height: 133.382  y:168.309
+  console.log(availableHeight.value - 133.382)
 })
 onBeforeUnmount(() => {
   resizeObs?.disconnect()
@@ -123,6 +132,12 @@ const courtSize = computed(() => {
 
 // ---------- draw state (pen / arrow tools) ----------
 const drawing = ref<DiagramElement | null>(null)
+// True while the eraser is being dragged across the canvas
+const erasing = ref(false)
+// Eraser radius in normalized space — how close a point must be to be rubbed out
+const ERASE_R = 0.016
+// Cursor position (normalized) for the eraser ring; null when not hovering
+const eraserPos = ref<Point | null>(null)
 
 // ---------- select/drag state ----------
 const selectedId = ref<string | null>(null)
@@ -289,10 +304,8 @@ function onDrawDown(e: PointerEvent) {
   const p = toNorm(e)
 
   if (tool.value === 'erase') {
-    const hit = [...elements.value]
-      .reverse()
-      .find((el) => distToElement(p, el) < HIT_BODY)
-    if (hit) commit(elements.value.filter((el) => el.id !== hit.id))
+    erasing.value = true
+    eraseAt(p)
     return
   }
 
@@ -337,7 +350,47 @@ function onDrawDown(e: PointerEvent) {
   }
 }
 
+// Pixel-style eraser: rub out points within ERASE_R of p. Pen strokes are split
+// into separate strokes where erased; markers/arrows are removed whole.
+function eraseAt(p: Point) {
+  let changed = false
+  const next: DiagramElement[] = []
+  for (const el of elements.value) {
+    if (el.type === 'pen') {
+      const runs: Point[][] = []
+      let run: Point[] = []
+      for (const pt of el.points) {
+        if (dist(pt, p) < ERASE_R) {
+          if (run.length) { runs.push(run); run = [] }
+          changed = true
+        } else {
+          run.push(pt)
+        }
+      }
+      if (run.length) runs.push(run)
+      // Untouched stroke: keep as-is to avoid needless churn
+      if (runs.length === 1 && runs[0].length === el.points.length) {
+        next.push(el)
+        continue
+      }
+      // Re-emit each surviving segment as its own stroke
+      for (const r of runs) {
+        if (r.length >= 2) next.push({ ...el, id: crypto.randomUUID(), points: r })
+      }
+    } else if (distToElement(p, el) < ERASE_R) {
+      changed = true
+    } else {
+      next.push(el)
+    }
+  }
+  if (changed) commit(next)
+}
+
 function onDrawMove(e: PointerEvent) {
+  if (tool.value === 'erase') {
+    if (erasing.value) eraseAt(toNorm(e))
+    return
+  }
   if (!drawing.value) return
   const p = toNorm(e)
   if (drawing.value.type === 'pen') {
@@ -348,6 +401,7 @@ function onDrawMove(e: PointerEvent) {
 }
 
 function onDrawUp() {
+  erasing.value = false
   if (!drawing.value) return
   const el = drawing.value
   drawing.value = null
@@ -363,12 +417,14 @@ function onDrawUp() {
 // ---------- router to per-tool handlers ----------
 function onPointerDown(e: PointerEvent) {
   if (!props.editable) return
+  if (tool.value === 'erase') eraserPos.value = toNorm(e)
   if (tool.value === 'select') onSelectDown(e)
   else onDrawDown(e)
 }
 
 function onPointerMove(e: PointerEvent) {
   if (!props.editable) return
+  if (tool.value === 'erase') eraserPos.value = toNorm(e)
   if (tool.value === 'select') onSelectMove(e)
   else onDrawMove(e)
 }
@@ -377,6 +433,12 @@ function onPointerUp() {
   if (!props.editable) return
   if (tool.value === 'select') onSelectUp()
   else onDrawUp()
+}
+
+// Hide the eraser ring when the pointer leaves the canvas
+function onPointerLeave() {
+  eraserPos.value = null
+  onPointerUp()
 }
 
 function clearAll() { commit([]) }
@@ -598,7 +660,7 @@ defineExpose({ exportPng })
   <div :class="editable ? 'flex flex-col gap-2' : ''">
 
     <!-- ── TOP TOOLBAR (editable only) ── -->
-    <div v-if="editable" class="flex items-center gap-1.5">
+    <div v-if="editable && !props.tool" class="flex items-center flex-wrap gap-1.5">
       <button
         class="rounded-lg border border-ink-700 bg-ink-800 p-2 text-chalk hover:bg-ink-700 active:bg-ink-600"
         title="Undo"
@@ -630,11 +692,12 @@ defineExpose({ exportPng })
       </button>
       <!-- Quick-start marker templates -->
       <select
+        v-if="props.modelValue.elements.length == 0"
         class="input !w-32 py-1 text-xs"
         title="Insert a quick-start formation"
         @change="onTemplateSelect"
       >
-        <option value="" selected>Template…</option>
+        <option value="" selected>Templates</option>
         <option value="3out">3-Out</option>
         <option value="4out">4-Out</option>
         <option value="4high">4-High</option>
@@ -643,8 +706,8 @@ defineExpose({ exportPng })
         
       </select>
       <!-- Context-sensitive options (arrow style, marker team/label, color) -->
-      <div v-if="tool === 'arrow' || tool === 'marker'" class="mx-auto h-[38px] flex items-center gap-2">
-        <select v-if="tool === 'arrow'" v-model="arrowStyle" class="input !w-36 flex-1 py-1 text-xs">
+      <div v-if="tool === 'arrow' || tool === 'marker'" class="h-[38px] flex items-center gap-2">
+        <select v-if="tool === 'arrow'" v-model="arrowStyle" class="input !w-28 flex-1 py-1 text-xs">
           <option value="pass">Pass (dashed)</option>
           <option value="cut">Cut (solid)</option>
           <option value="dribble">Dribble (wavy)</option>
@@ -663,18 +726,9 @@ defineExpose({ exportPng })
             aria-label="Marker label"
           />
         </template>
-        <input
-          v-model="color"
-          type="color"
-          class="h-8 w-8 shrink-0 cursor-pointer rounded border border-ink-600 bg-ink-800"
-          title="Color"
-        />
-        <label class="flex shrink-0 items-center gap-1 text-xs text-ink-500">
-          <input v-model.number="strokeWidth" type="range" min="1" max="8" class="w-16" />
-        </label>
       </div>
       <!-- Half / Full court toggle -->
-      <div class="ml-auto flex overflow-hidden rounded-lg border border-ink-600">
+      <div v-if="props.modelValue.elements.length == 0" class="ml-auto flex overflow-hidden rounded-lg border border-ink-600">
         <button
           v-for="c in (['half', 'full'] as CourtType[])"
           :key="c"
@@ -701,7 +755,7 @@ defineExpose({ exportPng })
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
-        @pointerleave="onPointerUp"
+        @pointerleave="onPointerLeave"
       >
         <!-- court markings -->
         <g fill="none" stroke="#1c1614" stroke-width="2" opacity="0.85">
@@ -738,19 +792,16 @@ defineExpose({ exportPng })
         </g>
 
         <!-- LC mark — subtle brand watermark behind diagram elements -->
-        <text
-          :x="modelValue.courtType === 'full' ? W / 2 : W / 2"
-          :y="modelValue.courtType === 'full' ? H / 2 + 8 : H * 0.82"
-          font-family="'Barlow Condensed', sans-serif"
-          font-size="36"
-          font-weight="900"
-          text-anchor="middle"
-          dominant-baseline="middle"
-          fill="#cc0000"
-          opacity="0.10"
+        <image
+          :href="logoUrl"
+          :width="WATERMARK_W"
+          :height="WATERMARK_W / LOGO_ASPECT"
+          :x="W / 2 - WATERMARK_W / 2"
+          :y="H / 2 - WATERMARK_W / LOGO_ASPECT / 2 + (modelValue.courtType === 'half' ? 165 : 0)"
+          opacity="0.20"
+          preserveAspectRatio="xMidYMid meet"
           pointer-events="none"
-          letter-spacing="4"
-        >LC</text>
+        />
 
         <!-- drawn elements -->
         <g v-for="el in allElements" :key="el.id">
@@ -871,11 +922,24 @@ defineExpose({ exportPng })
             </template>
           </template>
         </g>
+
+        <!-- eraser ring: matches the normalized erase radius (ellipse in SVG space) -->
+        <ellipse
+          v-if="tool === 'erase' && eraserPos"
+          :cx="eraserPos.x * W"
+          :cy="eraserPos.y * H"
+          :rx="ERASE_R * W"
+          :ry="ERASE_R * H"
+          fill="rgba(255,255,255,0.15)"
+          stroke="#0d0f13"
+          stroke-width="1.5"
+          pointer-events="none"
+        />
       </svg>
     </div>
 
     <!-- ── BOTTOM TOOLBAR (editable only) ── -->
-    <div v-if="editable" class="flex flex-col gap-2">
+    <div v-if="editable && !props.tool" class="flex flex-col gap-2">
       <!-- Tool selector strip -->
       <div class="flex gap-1 rounded-2xl bg-ink-800 p-1.5">
         <button
@@ -891,6 +955,25 @@ defineExpose({ exportPng })
           <ArrowUpRightIcon v-else-if="t === 'arrow'" class="h-5 w-5" />
           <UserPlusIcon v-else-if="t === 'marker'" class="h-5 w-5" />
           <TrashIcon v-else-if="t === 'erase'" class="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+
+    <!-- ── WHITEBOARD TOOLBAR (whiteboard view only) ── -->
+    <div v-if="editable && props.tool" class="flex flex-col gap-2">
+      <div class="flex gap-1 rounded-2xl bg-ink-800 p-1.5">
+        <button
+          v-for="t in (['undo', 'pen', 'erase'] as Tool[])"
+          :key="t"
+          class="flex flex-1 items-center justify-center rounded-xl py-2.5 transition"
+          :class="[tool === t ? 'bg-ink-600 text-chalk shadow-sm' : 'text-ink-400 hover:text-chalk', t === 'undo' && elements.length === 0 ? 'opacity-50 cursor-not-allowed' : '']"
+          :title="capitalize(t)"
+          :disabled="t === 'undo' && elements.length === 0"
+          @click="tool = t, tool === 'undo' ? [undo(), tool = 'pen'] : null"
+        >
+          <ArrowUturnLeftIcon v-if="t === 'undo'" class="h-5 w-5" />
+          <PencilIcon v-else-if="t === 'pen'" class="h-5 w-5" />
+          <TrashIcon v-else class="h-5 w-5" />
         </button>
       </div>
     </div>

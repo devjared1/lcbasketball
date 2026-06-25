@@ -7,7 +7,7 @@ import { useStats } from '@/composables/useStats'
 import CourtCanvas from '@/components/CourtCanvas.vue'
 import PlayAnimator from '@/components/PlayAnimator.vue'
 import VideoUploader from '@/components/VideoUploader.vue'
-import { PlusIcon, TrashIcon } from '@heroicons/vue/24/outline'
+import { BackspaceIcon, PlusIcon, PrinterIcon, TrashIcon } from '@heroicons/vue/24/outline'
 
 const route = useRoute()
 const router = useRouter()
@@ -185,16 +185,19 @@ async function save() {
     <div
       class="sticky top-0 z-10 -mx-4 -mt-6 flex items-center gap-3 border-b border-ink-700/60 bg-ink-900/95 px-4 py-3 backdrop-blur-xl"
     >
-      <button class="btn-ghost py-1.5 text-sm" @click="router.push('/plays')">← Back</button>
-      <h1 class="font-stencil grow text-lg font-bold">
+      <button class="btn-ghost py-1.5 text-sm" @click="router.push('/plays')">
+        <BackspaceIcon class="h-5 w-5" />
+      </button>
+      <h1 class="font-stencil grow text-lg font-bold capitalize leading-tight">
         {{ isNew ? 'New play' : 'Edit play' }}
       </h1>
       <button
         v-if="!isNew"
         class="btn-ghost py-1.5 text-sm"
         title="Print play sheet"
-        @click="router.push(`/plays/${playId}/print`)"
-      >Print</button>
+        @click="router.push(`/plays/${playId}/print`)">
+        <PrinterIcon class="h-5 w-5" />
+      </button>
       <button
         class="btn-primary py-1.5 text-sm"
         :disabled="(isNew ? !hasCanvasContent : !form.name.trim()) || saving"
@@ -283,7 +286,7 @@ async function save() {
             title="Add phase"
             @click="addPhase"
           >
-            <PlusIcon class="h-4 w-4" />
+            <PlusIcon class="h-5 w-5" />
           </button>
           <button
             v-if="totalPhases > 1"
@@ -291,7 +294,7 @@ async function save() {
             title="Delete current phase"
             @click="deleteCurrentPhase"
           >
-            <TrashIcon class="h-4 w-4" />
+            <TrashIcon class="h-5 w-5" />
           </button>
         </div>
 
