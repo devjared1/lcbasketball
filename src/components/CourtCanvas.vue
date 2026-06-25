@@ -47,7 +47,7 @@ const W = computed(() => dims.value.w)
 const H = computed(() => dims.value.h)
 
 // LC brand watermark (centered, subtle). Width in SVG units; aspect ≈ logo's.
-const logoUrl = `${import.meta.env.BASE_URL}/public/LCLogo.png`
+const logoUrl = `${import.meta.env.BASE_URL}/LCLogo.png`
 const LOGO_ASPECT = 343 / 305
 const WATERMARK_W = 150
 
@@ -82,13 +82,16 @@ function measureAvailableHeight() {
   const bottomH = 60
   availableHeight.value = Math.max(0, window.innerHeight - top - reserved - 8 - bottomH)
   // if on route /plays, adjust the available height to be 2/3 of the available height for desktop and 3/4 for mobile, minus 112px
-  if (window.location.hash === '#/plays') {
-    if (window.innerWidth >= 768) {
-      availableHeight.value = (2/3) * availableHeight.value
-    } else {
-      availableHeight.value = (3/4) * availableHeight.value
+  const animatorDiv = document.getElementById('videoAnimator');
+  if (!animatorDiv) {
+    if (window.location.hash === '#/plays') {
+      if (window.innerWidth >= 768) {
+        availableHeight.value = (2/3) * availableHeight.value
+      } else {
+        availableHeight.value = (3/4) * availableHeight.value
+      }
+      availableHeight.value -= 112
     }
-    availableHeight.value -= 112
   }
 }
 
@@ -107,9 +110,6 @@ onMounted(() => {
     containerSize.value = { w: el.clientWidth, h: el.clientHeight }
   }
   window.addEventListener('resize', measureAvailableHeight)
-  
-  // height: 133.382  y:168.309
-  console.log(availableHeight.value - 133.382)
 })
 onBeforeUnmount(() => {
   resizeObs?.disconnect()
@@ -692,8 +692,7 @@ defineExpose({ exportPng })
       </button>
       <!-- Quick-start marker templates -->
       <select
-        v-if="props.modelValue.elements.length == 0"
-        class="input !w-32 py-1 text-xs"
+        class="input h-[38px] !w-32 py-1.5 text-xs"
         title="Insert a quick-start formation"
         @change="onTemplateSelect"
       >

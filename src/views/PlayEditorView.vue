@@ -308,6 +308,7 @@ async function save() {
     v-if="animating"
     :name="form.name || 'Play'"
     :diagram="form.diagram"
+    :videos="play?.videos"
     @close="animating = false"
   />
 

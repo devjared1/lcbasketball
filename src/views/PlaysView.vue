@@ -5,7 +5,7 @@ import type { Play } from '@/types'
 import { usePlays } from '@/composables/usePlays'
 import CourtCanvas from '@/components/CourtCanvas.vue'
 import PlayAnimator from '@/components/PlayAnimator.vue'
-import { ArrowsPointingOutIcon, DocumentDuplicateIcon, TrashIcon } from '@heroicons/vue/24/outline'
+import { PencilIcon, DocumentDuplicateIcon, PlayIcon, TrashIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
 const { plays, loading, error, fetchPlays, deletePlay, duplicatePlay } = usePlays()
@@ -46,7 +46,8 @@ function phaseCount(p: Play): number {
   return 1 + (p.diagram.phases?.length ?? 0)
 }
 
-const animPlay = ref<Play | null>(null)
+// ---- inline preview (animate diagram + play attached clips) ----
+const previewPlay = ref<Play | null>(null)
 
 // ---- drag-to-reorder (localStorage) ----
 const STORAGE_KEY = 'lc-plays-order'
@@ -151,34 +152,41 @@ function onDragEnd() {
         @dragover="onDragOver($event, p)"
         @dragend="onDragEnd"
       >
-        <div class="pointer-events-none bg-court-wood">
+        <div class="pointer-events-none mx-auto w-[70%] bg-court-wood">
           <CourtCanvas :model-value="p.diagram" :editable="false" :total-phases="phaseCount(p)" />
         </div>
         <div class="p-3">
           <div class="flex items-start justify-between gap-2">
             <h3 class="font-semibold leading-tight">{{ p.name }}</h3>
             <div class="flex shrink-0 items-center gap-1.5">
-              <span v-if="phaseCount(p) > 1" class="rounded bg-ink-700 px-1.5 py-0.5 text-[11px] text-ink-400">
+              <button
+                v-if="phaseCount(p) > 1"
+                class="inline-flex rounded bg-ink-700 px-1.5 py-0.5 text-[11px] text-ink-400"
+                @click="previewPlay = p, previewPlay.default_preview_mode = 'diagram'">
                 {{ phaseCount(p) }} phases
-              </span>
-              <span v-if="p.videos?.length" class="rounded bg-ink-700 px-1.5 py-0.5 text-[11px] text-ink-500">
-                ▶ {{ p.videos.length }}
-              </span>
+              </button>
+              <button
+                v-if="p.videos?.length"
+                class="inline-flex rounded bg-ink-700 px-1.5 py-0.5 text-[11px] text-ink-500"
+                title="Preview clips"
+                @click="previewPlay = p, previewPlay.default_preview_mode = 'video'">
+                <PlayIcon class="h-4 w-4" />{{ p.videos.length }}
+              </button>
             </div>
           </div>
           <p v-if="p.category" class="mt-0.5 text-xs uppercase tracking-wide text-rim">{{ p.category }}</p>
           <p v-if="p.description" class="mt-1 line-clamp-2 text-sm text-ink-500">{{ p.description }}</p>
           <div class="mt-3 flex gap-2">
             <span class="ml-auto" />
-            <button class="btn-ghost py-1.5 text-xs" @click="router.push(`/plays/${p.id}`)">
-              <ArrowsPointingOutIcon class="h-4 w-4" />
-            </button>
             <button
-              v-if="phaseCount(p) > 1"
               class="btn-ghost py-1.5 text-xs"
-              title="Animate phases"
-              @click="animPlay = p"
-            >▷</button>
+              title="Preview"
+              @click="previewPlay = p, previewPlay.default_preview_mode = p.videos?.length ? 'video' : 'diagram'">
+              <PlayIcon class="h-4 w-4" />
+            </button>
+            <button class="btn-ghost py-1.5 text-xs" title="Open editor" @click="router.push(`/plays/${p.id}`)">
+              <PencilIcon class="h-4 w-4" />
+            </button>
             <button class="btn-ghost py-1.5 text-xs" title="Duplicate" @click="onDuplicate(p)">
               <DocumentDuplicateIcon class="h-4 w-4" />
             </button>
@@ -189,12 +197,15 @@ function onDragEnd() {
         </div>
       </article>
     </div>
-  </section>
 
-  <PlayAnimator
-    v-if="animPlay"
-    :name="animPlay.name"
-    :diagram="animPlay.diagram"
-    @close="animPlay = null"
-  />
+    <!-- Inline preview overlay: animated diagram + attached clips -->
+    <PlayAnimator
+      v-if="previewPlay"
+      :name="previewPlay.name"
+      :diagram="previewPlay.diagram"
+      :videos="previewPlay.videos"
+      :default_preview_mode="previewPlay.default_preview_mode"
+      @close="previewPlay = null"
+    />
+  </section>
 </template>

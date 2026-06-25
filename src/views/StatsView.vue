@@ -331,7 +331,7 @@ const seasonStats = computed<SeasonRow[]>(() => {
         </div>
 
         <!-- main: tracker + box score -->
-        <div class="flex flex-col gap-6">
+        <div class="flex flex-col gap-6 overflow-y-auto" style="height: calc(100dvh - 202px);">
           <div v-if="!activeGame" class="card p-10 text-center text-ink-500">
             Pick or start a game to begin tracking.
           </div>
@@ -474,7 +474,7 @@ const seasonStats = computed<SeasonRow[]>(() => {
             </div>
 
             <!-- box score -->
-            <div class="card overflow-x-auto p-4">
+            <div class="card p-4">
               <h2 class="mb-3 font-stencil font-bold">Box score</h2>
               <table class="w-full text-right font-mono text-sm">
                 <thead class="text-ink-500">
