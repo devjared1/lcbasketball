@@ -110,21 +110,27 @@ async function onDeleteGame(id: string) {
 }
 
 // ----- live tracking -----
-const STAT_BUTTONS: { stat: StatType; label: string; tone: string }[] = [
-  { stat: 'fg_made', label: '+2', tone: 'bg-home/20 text-home' },
-  { stat: 'fg_miss', label: 'FG ✗', tone: 'bg-ink-700 text-ink-500' },
-  { stat: 'three_made', label: '+3', tone: 'bg-home/20 text-home' },
-  { stat: 'three_miss', label: '3 ✗', tone: 'bg-ink-700 text-ink-500' },
-  { stat: 'ft_made', label: '+1', tone: 'bg-home/20 text-home' },
-  { stat: 'ft_miss', label: 'FT ✗', tone: 'bg-ink-700 text-ink-500' },
+const SCORING_STATS: { stat: StatType; label: string; tone: string }[] = [
+  { stat: 'fg_made',    label: '2FG+', tone: 'bg-home/20 text-home' },
+  { stat: 'fg_miss',   label: '2FG−', tone: 'bg-ink-700 text-ink-500' },
+  { stat: 'three_made', label: '3FG+', tone: 'bg-home/20 text-home' },
+  { stat: 'three_miss', label: '3FG−', tone: 'bg-ink-700 text-ink-500' },
+  { stat: 'ft_made',   label: 'FT+',  tone: 'bg-home/20 text-home' },
+  { stat: 'ft_miss',   label: 'FT−',  tone: 'bg-ink-700 text-ink-500' },
+]
+
+const OTHER_STATS: { stat: StatType; label: string; tone: string }[] = [
   { stat: 'rebound_def', label: 'DREB', tone: 'bg-ink-700 text-chalk' },
   { stat: 'rebound_off', label: 'OREB', tone: 'bg-ink-700 text-chalk' },
-  { stat: 'assist', label: 'AST', tone: 'bg-ink-700 text-chalk' },
-  { stat: 'steal', label: 'STL', tone: 'bg-ink-700 text-chalk' },
-  { stat: 'block', label: 'BLK', tone: 'bg-ink-700 text-chalk' },
-  { stat: 'turnover', label: 'TOV', tone: 'bg-rim/20 text-rim' },
-  { stat: 'foul', label: 'FOUL', tone: 'bg-rim/20 text-rim' },
+  { stat: 'assist',      label: 'AST',  tone: 'bg-ink-700 text-chalk' },
+  { stat: 'steal',       label: 'STL',  tone: 'bg-ink-700 text-chalk' },
+  { stat: 'block',       label: 'BLK',  tone: 'bg-ink-700 text-chalk' },
+  { stat: 'turnover',    label: 'TOV',  tone: 'bg-rim/20 text-rim' },
+  { stat: 'foul',        label: 'FOUL', tone: 'bg-rim/20 text-rim' },
 ]
+
+const selectedPlayerId = ref<string | null>(null)
+const selectedPlayer = computed(() => players.value.find((p) => p.id === selectedPlayerId.value) ?? null)
 
 async function tap(playerId: string, stat: StatType) {
   if (!activeGame.value) return
@@ -378,72 +384,104 @@ const seasonStats = computed<SeasonRow[]>(() => {
               <!-- TRACKER TAB -->
               <template v-if="trackerTab === 'tracker'">
                 <p v-if="!players.length" class="text-sm text-ink-500">Add players to the roster first.</p>
-                <div v-else class="space-y-3">
-                  <div v-for="p in players" :key="p.id" class="rounded-lg border border-ink-700 p-2">
-                    <div class="mb-2 flex items-center justify-between">
-                      <span class="font-semibold">
-                        <span class="font-mono text-ink-500">#{{ p.number ?? '—' }}</span>
-                        {{ p.name }}
+                <template v-else>
+                  <!-- Clickable player rows -->
+                  <div class="space-y-1">
+                    <button
+                      v-for="p in players"
+                      :key="p.id"
+                      class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition"
+                      :class="selectedPlayerId === p.id
+                        ? 'bg-ink-700 ring-1 ring-rim'
+                        : 'bg-ink-800 hover:bg-ink-700'"
+                      @click="selectedPlayerId = p.id"
+                    >
+                      <span class="w-7 shrink-0 text-right font-mono text-xs text-ink-500">#{{ p.number ?? '—' }}</span>
+                      <span class="grow text-sm font-semibold">{{ p.name }}</span>
+                      <span class="shrink-0 text-sm font-bold text-chalk">
+                        {{ boxScore.find(r => r.player_id === p.id)?.pts ?? 0 }}<span class="text-xs font-normal text-ink-500"> pts</span>
                       </span>
-                      <div class="flex items-center gap-2">
-                        <!-- Sub button -->
-                        <button
-                          class="rounded border border-ink-600 px-2 py-0.5 text-xs text-ink-500 hover:border-chalk hover:text-chalk"
-                          :class="subPickerPlayerId === p.id ? 'border-yellow-500 text-yellow-400' : ''"
-                          @click="toggleSubPicker(p.id)"
-                        >Sub ↕</button>
-                        <button class="text-xs text-ink-500 hover:text-rim" @click="undoLastFor(p.id)">undo</button>
+                      <button
+                        class="shrink-0 px-1 text-[10px] text-ink-500 hover:text-rim"
+                        title="Undo last stat"
+                        @click.stop="undoLastFor(p.id)"
+                      >undo</button>
+                    </button>
+                  </div>
+
+                  <!-- Stats toolbar -->
+                  <div class="mt-2 rounded-xl border border-ink-700 bg-ink-800 p-3">
+                    <!-- Selected player header + sub button -->
+                    <div class="mb-2.5 flex items-center justify-between">
+                      <div v-if="selectedPlayer" class="flex items-center gap-2">
+                        <span class="h-2 w-2 rounded-full bg-rim"></span>
+                        <span class="text-sm font-semibold">
+                          <span class="font-mono text-ink-500">#{{ selectedPlayer.number ?? '—' }}</span>
+                          {{ selectedPlayer.name }}
+                        </span>
                       </div>
+                      <p v-else class="text-xs italic text-ink-500">↑ Tap a player to select</p>
+                      <button
+                        v-if="selectedPlayer"
+                        class="rounded border px-2.5 py-1 text-xs transition"
+                        :class="subPickerPlayerId === selectedPlayerId
+                          ? 'border-yellow-500 text-yellow-400'
+                          : 'border-ink-600 text-ink-500 hover:border-chalk hover:text-chalk'"
+                        @click="toggleSubPicker(selectedPlayerId!)"
+                      >Sub ↕</button>
                     </div>
 
-                    <!-- Sub picker (who comes out for this player in) -->
-                    <div
-                      v-if="subPickerPlayerId === p.id"
-                      class="mb-2 rounded bg-ink-800 p-2"
-                    >
-                      <p class="mb-1 text-xs text-ink-500">
-                        <span class="text-yellow-400">{{ p.name }}</span> comes IN for:
+                    <!-- Sub picker -->
+                    <div v-if="subPickerPlayerId && subPickerPlayerId === selectedPlayerId" class="mb-2.5 rounded-lg bg-ink-900 p-2">
+                      <p class="mb-1.5 text-xs text-ink-500">
+                        <span class="text-yellow-400">{{ selectedPlayer?.name }}</span> comes IN for:
                       </p>
                       <div class="flex flex-wrap gap-1">
                         <button
-                          v-for="other in players.filter(op => op.id !== p.id)"
+                          v-for="other in players.filter(op => op.id !== selectedPlayerId)"
                           :key="other.id"
                           class="rounded bg-ink-700 px-2 py-1 text-xs text-chalk hover:bg-rim hover:text-white"
-                          @click="doSub(p.id, other.id)"
-                        >
-                          #{{ other.number ?? '—' }} {{ other.name }}
-                        </button>
-                        <button
-                          class="text-xs text-ink-500 hover:text-chalk"
-                          @click="subPickerPlayerId = null"
-                        >Cancel</button>
+                          @click="doSub(selectedPlayerId!, other.id)"
+                        >#{{ other.number ?? '—' }} {{ other.name }}</button>
+                        <button class="text-xs text-ink-500 hover:text-chalk" @click="subPickerPlayerId = null">Cancel</button>
                       </div>
                     </div>
 
-                    <div class="flex flex-wrap gap-1.5">
+                    <!-- Scoring buttons -->
+                    <div class="mb-1.5 grid grid-cols-6 gap-1">
                       <button
-                        v-for="b in STAT_BUTTONS"
+                        v-for="b in SCORING_STATS"
                         :key="b.stat"
-                        class="rounded px-2.5 py-1.5 text-xs font-semibold transition hover:brightness-125"
-                        :class="b.tone"
-                        @click="tap(p.id, b.stat)"
-                      >
-                        {{ b.label }}
-                      </button>
+                        class="rounded-lg py-3 text-xs font-semibold transition"
+                        :class="[b.tone, selectedPlayerId ? 'hover:brightness-125 active:scale-95' : 'cursor-default opacity-30']"
+                        :disabled="!selectedPlayerId"
+                        @click="selectedPlayerId && tap(selectedPlayerId, b.stat)"
+                      >{{ b.label }}</button>
+                    </div>
+                    <!-- Other stat buttons -->
+                    <div class="grid grid-cols-7 gap-1">
+                      <button
+                        v-for="b in OTHER_STATS"
+                        :key="b.stat"
+                        class="rounded-lg py-3 text-xs font-semibold transition"
+                        :class="[b.tone, selectedPlayerId ? 'hover:brightness-125 active:scale-95' : 'cursor-default opacity-30']"
+                        :disabled="!selectedPlayerId"
+                        @click="selectedPlayerId && tap(selectedPlayerId, b.stat)"
+                      >{{ b.label }}</button>
                     </div>
                   </div>
-                </div>
 
-                <!-- Sub log summary -->
-                <div v-if="subEvents.length > 0" class="mt-3 rounded bg-ink-800 p-2">
-                  <p class="mb-1 text-xs font-semibold text-ink-500">Substitutions</p>
-                  <ul class="space-y-0.5 text-xs text-ink-500">
-                    <li v-for="sub in subEvents" :key="sub.id">
-                      Q{{ sub.period }}: {{ players.find(p => p.id === sub.player_id_in)?.name ?? 'Unknown' }}
-                      IN for {{ players.find(p => p.id === sub.player_id_out)?.name ?? 'Unknown' }}
-                    </li>
-                  </ul>
-                </div>
+                  <!-- Sub log summary -->
+                  <div v-if="subEvents.length > 0" class="mt-2 rounded-lg bg-ink-800 p-2">
+                    <p class="mb-1 text-xs font-semibold text-ink-500">Substitutions</p>
+                    <ul class="space-y-0.5 text-xs text-ink-500">
+                      <li v-for="sub in subEvents" :key="sub.id">
+                        Q{{ sub.period }}: {{ players.find(p => p.id === sub.player_id_in)?.name ?? 'Unknown' }}
+                        IN for {{ players.find(p => p.id === sub.player_id_out)?.name ?? 'Unknown' }}
+                      </li>
+                    </ul>
+                  </div>
+                </template>
               </template>
 
               <!-- SHOT CHART TAB -->
