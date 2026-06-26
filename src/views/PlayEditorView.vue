@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { Diagram, DiagramElement, PlayDraft } from '@/types'
+import type { Diagram, DiagramElement, MarkerElement, PlayDraft } from '@/types'
 import { usePlays } from '@/composables/usePlays'
 import { useStats } from '@/composables/useStats'
 import CourtCanvas from '@/components/CourtCanvas.vue'
@@ -115,7 +115,20 @@ const phaseDiagram = computed<Diagram>({
 
 function addPhase() {
   if (!form.diagram.phases) form.diagram.phases = []
-  form.diagram.phases.push([])
+
+  // Inherit player markers from the last existing phase so positions carry forward.
+  // "Last phase" is always the one immediately before the new one being created,
+  // regardless of which phase the user is currently viewing.
+  const lastIdx = totalPhases.value - 1 // 0-based index of the current last phase
+  const lastElements: DiagramElement[] = lastIdx === 0
+    ? form.diagram.elements
+    : (form.diagram.phases[lastIdx - 1] ?? [])
+
+  const inheritedMarkers: DiagramElement[] = lastElements
+    .filter((el): el is MarkerElement => el.type === 'marker')
+    .map((el) => ({ ...el, at: { ...el.at } })) // deep-copy so moves in new phase don't affect previous
+
+  form.diagram.phases.push(inheritedMarkers)
   activePhase.value = form.diagram.phases.length // jump to the new phase
 }
 
