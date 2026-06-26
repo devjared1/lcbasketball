@@ -640,7 +640,7 @@ function exportPng(filename = 'play.png') {
     canvas.width = w * scale
     canvas.height = h * scale
     const ctx = canvas.getContext('2d')!
-    ctx.fillStyle = '#5c3d1e' // court wood background
+    ctx.fillStyle = '#e7c993' // court-wood (matches tailwind token)
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     ctx.scale(scale, scale)
     ctx.drawImage(img, 0, 0, w, h)
