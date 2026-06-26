@@ -152,7 +152,7 @@ function onDragEnd() {
         @dragover="onDragOver($event, p)"
         @dragend="onDragEnd"
       >
-        <div class="pointer-events-none mx-auto w-[70%] bg-court-wood">
+        <div class="pointer-events-none h-48 w-full overflow-hidden bg-court-wood">
           <CourtCanvas :model-value="p.diagram" :editable="false" :total-phases="phaseCount(p)" />
         </div>
         <div class="p-3">
