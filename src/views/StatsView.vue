@@ -233,12 +233,11 @@ const seasonStats = computed<SeasonRow[]>(() => {
 
 <template>
   <section class="flex flex-col gap-4">
+    <hr class="border-ink-500" />
     <!-- Sticky page header -->
     <div
-      class="sticky top-0 z-10 -mx-4 -mt-6 flex items-center gap-3 border-b border-ink-700/60 bg-ink-900/95 px-4 py-3 backdrop-blur-xl"
-    >
+      class="sticky top-0 z-10 -mx-4 -mt-6 flex items-center gap-3 border-b border-ink-700/60 bg-ink-900/95 px-4 py-3 backdrop-blur-xl">
       <h1 class="font-stencil grow text-lg font-bold capitalize leading-tight">Stats</h1>
-
       <!-- Mode tabs -->
       <div class="flex gap-1 rounded-lg bg-ink-800 p-0.5">
         <button
@@ -272,7 +271,7 @@ const seasonStats = computed<SeasonRow[]>(() => {
 
     <!-- ==================== GAME MODE ==================== -->
     <template v-if="mode === 'game'">
-      <div class="grid gap-5 lg:grid-cols-[280px_1fr]">
+      <div class="grid gap-5 lg:grid-cols-[280px_1fr] py-2">
 
         <!-- Left: Roster card (always visible in game mode) -->
         <div class="card p-4">

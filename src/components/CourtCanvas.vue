@@ -658,7 +658,6 @@ defineExpose({ exportPng })
 
 <template>
   <div :class="editable ? 'flex flex-col gap-2' : ''">
-
     <!-- ── TOP TOOLBAR (editable only) ── -->
     <div v-if="editable && !props.tool" class="flex items-center flex-wrap gap-1.5">
       <button
