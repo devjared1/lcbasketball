@@ -205,12 +205,11 @@ const seasonStats = computed<SeasonRow[]>(() => {
 
 <template>
   <section class="flex flex-col gap-4">
+    <hr class="border-ink-500" />
     <!-- Sticky page header -->
     <div
-      class="sticky top-0 z-10 -mx-4 -mt-6 flex items-center gap-3 border-b border-ink-700/60 bg-ink-900/95 px-4 py-3 backdrop-blur-xl"
-    >
+      class="sticky top-0 z-10 -mx-4 -mt-6 flex items-center gap-3 border-b border-ink-700/60 bg-ink-900/95 px-4 py-3 backdrop-blur-xl">
       <h1 class="font-stencil grow text-lg font-bold capitalize leading-tight">Stats</h1>
-
       <!-- Mode tabs -->
       <div class="flex gap-1 rounded-lg bg-ink-800 p-0.5">
         <button
@@ -360,7 +359,7 @@ const seasonStats = computed<SeasonRow[]>(() => {
             />
 
             <!-- Box score (clickable rows to select player) -->
-            <div class="card overflow-x-auto p-4">
+            <div class="card overflow-x-auto p-4" style="height: calc(100dvh - 360px)">
               <h2 class="mb-3 font-stencil font-bold">Box Score</h2>
               <table class="w-full text-right font-mono text-sm">
                 <thead class="text-ink-500">

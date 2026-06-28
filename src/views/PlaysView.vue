@@ -141,18 +141,18 @@ function onDragEnd() {
       No plays match "{{ search }}".
     </p>
 
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 overflow-y-auto pb-2" style="height: calc(100dvh - 240px)">
       <article
         v-for="p in sortedFiltered"
         :key="p.id"
-        class="card cursor-grab overflow-hidden active:cursor-grabbing"
+        class="card cursor-grab overflow-hidden active:cursor-grabbing h-[400px]"
         :class="draggingId === p.id ? 'opacity-40 ring-2 ring-rim' : ''"
         draggable="true"
         @dragstart="onDragStart($event, p)"
         @dragover="onDragOver($event, p)"
         @dragend="onDragEnd"
       >
-        <div class="pointer-events-none h-48 w-full overflow-hidden bg-court-wood">
+        <div class="pointer-events-none h-72 w-2/3 mx-auto overflow-hidden bg-court-wood">
           <CourtCanvas :model-value="p.diagram" :editable="false" :total-phases="phaseCount(p)" />
         </div>
         <div class="p-3">
@@ -175,7 +175,7 @@ function onDragEnd() {
             </div>
           </div>
           <p v-if="p.category" class="mt-0.5 text-xs uppercase tracking-wide text-rim">{{ p.category }}</p>
-          <p v-if="p.description" class="mt-1 line-clamp-2 text-sm text-ink-500">{{ p.description }}</p>
+          <!-- <p v-if="p.description" class="mt-1 line-clamp-2 text-sm text-ink-500">{{ p.description }}</p> -->
           <div class="mt-3 flex gap-2">
             <span class="ml-auto" />
             <button

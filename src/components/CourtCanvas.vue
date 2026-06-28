@@ -73,25 +73,24 @@ const availableHeight = ref(0)
 function measureAvailableHeight() {
   const el = containerRef.value
   if (!el) return
-  const top = el.getBoundingClientRect().top
-  const main = el.closest('main')
-  const reserved = main
-    ? parseFloat(getComputedStyle(main).paddingBottom) || 0
-    : (document.querySelector('nav.fixed')?.getBoundingClientRect().height ?? 0)
-  // Subtract bottom toolbar height (tool strip ~60px)
-  const bottomH = 60
-  availableHeight.value = Math.max(0, window.innerHeight - top - reserved - 8 - bottomH)
   // if on route /plays, adjust the available height to be 2/3 of the available height for desktop and 3/4 for mobile, minus 112px
   const animatorDiv = document.getElementById('videoAnimator');
-  if (!animatorDiv) {
-    if (window.location.hash === '#/plays') {
+  if (!animatorDiv && window.location.hash === '#/plays') {
+    const article = el.closest('article')
       if (window.innerWidth >= 768) {
-        availableHeight.value = (2/3) * availableHeight.value
+        availableHeight.value = (2/3) * article!.getBoundingClientRect().height
       } else {
-        availableHeight.value = (3/4) * availableHeight.value
+        availableHeight.value = (3/4) * article!.getBoundingClientRect().height
       }
-      availableHeight.value -= 112
-    }
+  } else {
+    const top = el.getBoundingClientRect().top
+    const main = el.closest('main')
+    const reserved = main
+      ? parseFloat(getComputedStyle(main).paddingBottom) || 0
+      : (document.querySelector('nav.fixed')?.getBoundingClientRect().height ?? 0)
+    // Subtract bottom toolbar height (tool strip ~60px)
+    const bottomH = 60
+    availableHeight.value = Math.max(0, window.innerHeight - top - reserved - 8 - bottomH)
   }
 }
 
@@ -658,7 +657,6 @@ defineExpose({ exportPng })
 
 <template>
   <div :class="editable ? 'flex flex-col gap-2' : ''">
-
     <!-- ── TOP TOOLBAR (editable only) ── -->
     <div v-if="editable && !props.tool" class="flex items-center flex-wrap gap-1.5">
       <button

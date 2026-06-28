@@ -13,18 +13,22 @@ const props = defineProps<{
 const { shots, fetchShots, recordShot } = useShotChart()
 const { recordStat } = useStats()
 
-// Court geometry constants (half-court, viewBox 500x470)
+// Court geometry — must match CourtCanvas.vue's half-court (10 SVG units = 1 foot, NFHS)
 const VB_W = 500
 const VB_H = 470
+const BOUNDARY = 6
+const BASKET_INSET = 56
+const KEY_HALF_W = 80
+const KEY_LENGTH = 190
+const LANE_ARC_R = 60
+const THREE_R = 237
+const THREE_CORNER_X = 44
+const THREE_ARC_Y_HALF = 182
 
-// Basket and court geometry for shot classification
-const BASKET_X = VB_W / 2
-const BASKET_Y = 56
-const THREE_RADIUS = 190
-const CORNER_X_MARGIN = 30 + 30 // corner 3 threshold (sideline + margin)
-const FT_Y = 196           // free throw line y in SVG units
-const FT_Y_TOLERANCE = 22  // px zone around FT line that counts as a FT attempt
-const PAINT_HALF_W = 90    // half-width of paint in SVG units
+// Free throw line y in SVG units
+const FT_Y_SVG = KEY_LENGTH + BASKET_INSET - BOUNDARY  // 240
+const FT_Y_TOLERANCE = 25
+const PAINT_HALF_W = KEY_HALF_W + 5
 
 // Pending shot placement
 const pendingShot = ref<{ x: number; y: number } | null>(null)
@@ -51,26 +55,27 @@ function svgToNorm(svgX: number, svgY: number) {
   return { x: svgX / VB_W, y: svgY / VB_H }
 }
 
+// Determine if a shot is a 3-pointer, using the same geometry as the drawn line.
 function isThreePointer(nx: number, ny: number): boolean {
   const svgX = nx * VB_W
   const svgY = ny * VB_H
-  const dx = svgX - BASKET_X
-  const dy = svgY - BASKET_Y
-  const dist = Math.sqrt(dx * dx + dy * dy)
-  if (svgX < CORNER_X_MARGIN || svgX > VB_W - CORNER_X_MARGIN) {
-    return svgY > 144
-  }
-  return dist > THREE_RADIUS
+  // Corner 3: beyond the vertical corner lines
+  if (svgX <= THREE_CORNER_X || svgX >= VB_W - THREE_CORNER_X) return true
+  // Arc 3: beyond the arc radius measured from the basket
+  const dx = svgX - VB_W / 2
+  const dy = svgY - BASKET_INSET
+  return Math.hypot(dx, dy) > THREE_R
 }
 
+// Classify shot as free throw, 2FG, or 3FG
 function getShotType(nx: number, ny: number): 'ft' | 'two' | 'three' {
   const svgX = nx * VB_W
   const svgY = ny * VB_H
-  // Free throw: near the FT line and within paint width
+  // Near the free throw line and within the paint width
   if (
-    Math.abs(svgY - FT_Y) < FT_Y_TOLERANCE &&
-    svgX > BASKET_X - PAINT_HALF_W &&
-    svgX < BASKET_X + PAINT_HALF_W
+    Math.abs(svgY - FT_Y_SVG) < FT_Y_TOLERANCE &&
+    svgX > VB_W / 2 - PAINT_HALF_W &&
+    svgX < VB_W / 2 + PAINT_HALF_W
   ) {
     return 'ft'
   }
@@ -170,43 +175,37 @@ function shotColor(shot: ShotEvent): string {
         @click="onCourtClick"
       >
         <!-- Court boundary -->
-        <rect x="6" y="6" :width="VB_W - 12" :height="VB_H - 12"
+        <rect :x="BOUNDARY" :y="BOUNDARY" :width="VB_W - BOUNDARY * 2" :height="VB_H - BOUNDARY * 2"
           fill="none" stroke="#374151" stroke-width="2" rx="4"/>
 
-        <!-- Half-court line -->
-        <line :x1="6" :y1="VB_H / 2" :x2="VB_W - 6" :y2="VB_H / 2"
-          stroke="#374151" stroke-width="1.5"/>
-
-        <!-- Center circle -->
-        <circle :cx="VB_W / 2" :cy="VB_H / 2" r="36"
-          fill="none" stroke="#374151" stroke-width="1.5"/>
-
         <!-- Paint / Key -->
-        <rect :x="VB_W / 2 - 80" y="6" width="160" height="190"
+        <rect :x="VB_W / 2 - KEY_HALF_W" :y="BOUNDARY" :width="KEY_HALF_W * 2"
+          :height="KEY_LENGTH + BASKET_INSET - BOUNDARY"
           fill="none" stroke="#374151" stroke-width="1.5"/>
 
         <!-- Free throw circle -->
-        <circle :cx="VB_W / 2" cy="196" r="60"
+        <circle :cx="VB_W / 2" :cy="KEY_LENGTH + BASKET_INSET - BOUNDARY" :r="LANE_ARC_R"
           fill="none" stroke="#374151" stroke-width="1.5" stroke-dasharray="8 6"/>
 
         <!-- Basket -->
-        <circle :cx="VB_W / 2" cy="56" r="10"
+        <circle :cx="VB_W / 2" :cy="BASKET_INSET" r="9"
           fill="none" stroke="#9ca3af" stroke-width="2"/>
         <!-- Backboard -->
-        <line :x1="VB_W / 2 - 24" y1="30" :x2="VB_W / 2 + 24" y2="30"
+        <line :x1="VB_W / 2 - 30" :y1="BASKET_INSET - 16" :x2="VB_W / 2 + 30" :y2="BASKET_INSET - 16"
           stroke="#9ca3af" stroke-width="3"/>
 
-        <!-- Corner 3 lines -->
-        <line x1="36" y1="6" x2="36" y2="144" stroke="#374151" stroke-width="1.5"/>
-        <line :x1="VB_W - 36" y1="6" :x2="VB_W - 36" y2="144" stroke="#374151" stroke-width="1.5"/>
-        <!-- 3pt arc -->
+        <!-- Three-point line: corner lines + arc -->
+        <line :x1="THREE_CORNER_X" :y1="BOUNDARY" :x2="THREE_CORNER_X" :y2="THREE_ARC_Y_HALF"
+          stroke="#374151" stroke-width="1.5"/>
+        <line :x1="VB_W - THREE_CORNER_X" :y1="BOUNDARY" :x2="VB_W - THREE_CORNER_X" :y2="THREE_ARC_Y_HALF"
+          stroke="#374151" stroke-width="1.5"/>
         <path
-          :d="`M 36 144 A 190 190 0 0 1 ${VB_W - 36} 144`"
+          :d="`M ${THREE_CORNER_X} ${THREE_ARC_Y_HALF} A ${THREE_R} ${THREE_R} 0 0 0 ${VB_W - THREE_CORNER_X} ${THREE_ARC_Y_HALF}`"
           fill="none" stroke="#374151" stroke-width="1.5"/>
 
         <!-- Restricted area arc -->
         <path
-          :d="`M ${VB_W / 2 - 40} 56 A 40 40 0 0 1 ${VB_W / 2 + 40} 56`"
+          :d="`M ${VB_W / 2 - 40} ${BASKET_INSET} A 40 40 0 0 1 ${VB_W / 2 + 40} ${BASKET_INSET}`"
           fill="none" stroke="#374151" stroke-width="1" stroke-dasharray="4 3"/>
 
         <!-- Shot markers -->
