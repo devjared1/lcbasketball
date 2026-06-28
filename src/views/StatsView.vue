@@ -438,7 +438,7 @@ const seasonStats = computed<SeasonRow[]>(() => {
             </div>
 
             <!-- Box score table (clickable rows to select player) -->
-            <div class="card overflow-x-auto p-4">
+            <div class="card overflow-x-auto p-4" style="height: calc(100dvh - 360px)">
               <div class="mb-3 flex items-center justify-between">
                 <h2 class="font-stencil font-bold">Box Score</h2>
                 <button
