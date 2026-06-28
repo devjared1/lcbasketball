@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useShotChart } from '@/composables/useShotChart'
-import type { ShotEvent } from '@/types'
+import { useStats } from '@/composables/useStats'
+import type { StatType, ShotEvent } from '@/types'
 
 const props = defineProps<{
   gameId: string
@@ -10,20 +11,29 @@ const props = defineProps<{
 }>()
 
 const { shots, fetchShots, recordShot } = useShotChart()
+const { recordStat } = useStats()
 
 // Court geometry constants (half-court, viewBox 500x470)
 const VB_W = 500
 const VB_H = 470
 
+// Basket and court geometry for shot classification
+const BASKET_X = VB_W / 2
+const BASKET_Y = 56
+const THREE_RADIUS = 190
+const CORNER_X_MARGIN = 30 + 30 // corner 3 threshold (sideline + margin)
+const FT_Y = 196           // free throw line y in SVG units
+const FT_Y_TOLERANCE = 22  // px zone around FT line that counts as a FT attempt
+const PAINT_HALF_W = 90    // half-width of paint in SVG units
+
 // Pending shot placement
 const pendingShot = ref<{ x: number; y: number } | null>(null)
 
-// Fetch shots when gameId changes
 watch(() => props.gameId, (id) => {
   if (id) fetchShots(id)
 }, { immediate: true })
 
-// Filtered shots by player (or all if no player selected)
+// Filter displayed shots by selected player (or show all)
 const displayShots = computed<ShotEvent[]>(() => {
   if (!props.playerId) return shots.value
   return shots.value.filter((s) => s.player_id === props.playerId)
@@ -41,9 +51,44 @@ function svgToNorm(svgX: number, svgY: number) {
   return { x: svgX / VB_W, y: svgY / VB_H }
 }
 
+function isThreePointer(nx: number, ny: number): boolean {
+  const svgX = nx * VB_W
+  const svgY = ny * VB_H
+  const dx = svgX - BASKET_X
+  const dy = svgY - BASKET_Y
+  const dist = Math.sqrt(dx * dx + dy * dy)
+  if (svgX < CORNER_X_MARGIN || svgX > VB_W - CORNER_X_MARGIN) {
+    return svgY > 144
+  }
+  return dist > THREE_RADIUS
+}
+
+function getShotType(nx: number, ny: number): 'ft' | 'two' | 'three' {
+  const svgX = nx * VB_W
+  const svgY = ny * VB_H
+  // Free throw: near the FT line and within paint width
+  if (
+    Math.abs(svgY - FT_Y) < FT_Y_TOLERANCE &&
+    svgX > BASKET_X - PAINT_HALF_W &&
+    svgX < BASKET_X + PAINT_HALF_W
+  ) {
+    return 'ft'
+  }
+  return isThreePointer(nx, ny) ? 'three' : 'two'
+}
+
+const pendingShotType = computed(() =>
+  pendingShot.value ? getShotType(pendingShot.value.x, pendingShot.value.y) : null
+)
+
+const shotTypeLabel = computed(() => {
+  if (pendingShotType.value === 'ft') return 'Free Throw'
+  if (pendingShotType.value === 'three') return '3-pointer'
+  return '2-pointer'
+})
 
 function onCourtClick(e: MouseEvent) {
-  // If there's already a pending shot waiting for made/miss, clear it
+  if (!props.playerId) return // must select a player first
   if (pendingShot.value) {
     pendingShot.value = null
     return
@@ -64,14 +109,16 @@ async function confirmShot(made: boolean) {
     pendingShot.value = null
     return
   }
-  await recordShot(
-    props.gameId,
-    props.playerId,
-    pendingShot.value.x,
-    pendingShot.value.y,
-    made,
-    props.period,
-  )
+
+  const type = getShotType(pendingShot.value.x, pendingShot.value.y)
+  let stat: StatType
+  if (type === 'ft') stat = made ? 'ft_made' : 'ft_miss'
+  else if (type === 'three') stat = made ? 'three_made' : 'three_miss'
+  else stat = made ? 'fg_made' : 'fg_miss'
+
+  await recordShot(props.gameId, props.playerId, pendingShot.value.x, pendingShot.value.y, made, props.period)
+  await recordStat(props.gameId, props.playerId, stat, props.period)
+
   pendingShot.value = null
 }
 
@@ -79,38 +126,16 @@ function cancelPending() {
   pendingShot.value = null
 }
 
-// Determine if a shot is a 3-pointer based on court position (simplified)
-// Three-point line: corner 3s are within ~14px of sideline, arc is ~190px radius from basket
-const BASKET_Y = 56 // basket inset from top (in SVG units when top is baseline)
-const THREE_RADIUS = 190 // approximate radius of 3pt arc in SVG units
-const CORNER_X_MIN = 30
-const CORNER_X_MAX = VB_W - 30
-
-function isThreePointer(nx: number, ny: number): boolean {
-  const svgX = nx * VB_W
-  const svgY = ny * VB_H
-  const basketX = VB_W / 2
-  const basketY = BASKET_Y
-  const dx = svgX - basketX
-  const dy = svgY - basketY
-  const dist = Math.sqrt(dx * dx + dy * dy)
-  // Corner 3: near sidelines
-  if (svgX < CORNER_X_MIN + 30 || svgX > CORNER_X_MAX - 30) {
-    return svgY > 140
-  }
-  return dist > THREE_RADIUS
-}
-
 function shotColor(shot: ShotEvent): string {
-  if (!shot.made) return '#ef4444' // red for miss
+  if (!shot.made) return '#ef4444'
   return isThreePointer(shot.x, shot.y) ? '#3b82f6' : '#16a34a'
 }
 </script>
 
 <template>
-  <div class="flex flex-col gap-3">
+  <div class="flex flex-col gap-2">
     <!-- FG% summary bar -->
-    <div class="flex items-center gap-4 text-sm">
+    <div class="flex items-center gap-4 text-xs">
       <span class="text-ink-500">
         FG: <span class="font-mono text-chalk">{{ fgSummary.made }}/{{ fgSummary.total }}</span>
       </span>
@@ -119,12 +144,12 @@ function shotColor(shot: ShotEvent): string {
           {{ fgSummary.pct }}%
         </span>
       </span>
-      <span class="ml-auto flex items-center gap-2 text-xs text-ink-500">
+      <span class="ml-auto flex items-center gap-2 text-ink-500">
         <span class="inline-flex items-center gap-1">
-          <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#16a34a"/></svg> Made (2pt)
+          <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#16a34a"/></svg> 2pt
         </span>
         <span class="inline-flex items-center gap-1">
-          <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#3b82f6"/></svg> Made (3pt)
+          <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#3b82f6"/></svg> 3pt
         </span>
         <span class="inline-flex items-center gap-1">
           <svg width="10" height="10">
@@ -135,16 +160,12 @@ function shotColor(shot: ShotEvent): string {
       </span>
     </div>
 
-    <!-- No player warning -->
-    <p v-if="!playerId" class="rounded bg-ink-700 px-3 py-2 text-sm text-ink-500">
-      Select a player above to place shots. All shots shown below.
-    </p>
-
-    <!-- Court SVG wrapper with relative positioning for overlay -->
+    <!-- Court SVG -->
     <div class="relative w-full">
       <svg
         :viewBox="`0 0 ${VB_W} ${VB_H}`"
-        class="w-full cursor-crosshair rounded-lg border border-ink-700 bg-ink-900"
+        class="w-full rounded-lg border border-ink-700 bg-ink-900"
+        :class="playerId ? 'cursor-crosshair' : 'cursor-default'"
         preserveAspectRatio="xMidYMid meet"
         @click="onCourtClick"
       >
@@ -160,7 +181,7 @@ function shotColor(shot: ShotEvent): string {
         <circle :cx="VB_W / 2" :cy="VB_H / 2" r="36"
           fill="none" stroke="#374151" stroke-width="1.5"/>
 
-        <!-- Paint / Key (top half) -->
+        <!-- Paint / Key -->
         <rect :x="VB_W / 2 - 80" y="6" width="160" height="190"
           fill="none" stroke="#374151" stroke-width="1.5"/>
 
@@ -175,11 +196,10 @@ function shotColor(shot: ShotEvent): string {
         <line :x1="VB_W / 2 - 24" y1="30" :x2="VB_W / 2 + 24" y2="30"
           stroke="#9ca3af" stroke-width="3"/>
 
-        <!-- Three-point arc (simplified) -->
         <!-- Corner 3 lines -->
         <line x1="36" y1="6" x2="36" y2="144" stroke="#374151" stroke-width="1.5"/>
         <line :x1="VB_W - 36" y1="6" :x2="VB_W - 36" y2="144" stroke="#374151" stroke-width="1.5"/>
-        <!-- Arc from corner to corner -->
+        <!-- 3pt arc -->
         <path
           :d="`M 36 144 A 190 190 0 0 1 ${VB_W - 36} 144`"
           fill="none" stroke="#374151" stroke-width="1.5"/>
@@ -192,7 +212,6 @@ function shotColor(shot: ShotEvent): string {
         <!-- Shot markers -->
         <g v-for="shot in displayShots" :key="shot.id">
           <template v-if="shot.made">
-            <!-- Made: filled circle -->
             <circle
               :cx="shot.x * VB_W"
               :cy="shot.y * VB_H"
@@ -204,7 +223,6 @@ function shotColor(shot: ShotEvent): string {
             />
           </template>
           <template v-else>
-            <!-- Miss: X mark -->
             <line
               :x1="shot.x * VB_W - 6" :y1="shot.y * VB_H - 6"
               :x2="shot.x * VB_W + 6" :y2="shot.y * VB_H + 6"
@@ -218,7 +236,7 @@ function shotColor(shot: ShotEvent): string {
           </template>
         </g>
 
-        <!-- Pending shot indicator -->
+        <!-- Pending shot ring -->
         <circle
           v-if="pendingShot"
           :cx="pendingShot.x * VB_W"
@@ -231,24 +249,34 @@ function shotColor(shot: ShotEvent): string {
         />
       </svg>
 
-      <!-- Made/Miss overlay buttons near pending shot -->
-      <!-- Position derived from normalized coords so it stays correct on resize/rotate -->
+      <!-- No player hint overlay -->
+      <div
+        v-if="!playerId"
+        class="pointer-events-none absolute inset-0 flex items-end justify-center pb-3"
+      >
+        <span class="rounded-full bg-ink-900/80 px-3 py-1 text-xs text-ink-500">
+          Tap a player in the box score to record shots
+        </span>
+      </div>
+
+      <!-- Made / Miss popup near pending shot -->
       <div
         v-if="pendingShot"
-        class="absolute z-10 flex flex-col gap-1"
+        class="absolute z-10"
         :style="{
           left: `${pendingShot.x * 100}%`,
           top: `${pendingShot.y * 100}%`,
           transform: 'translate(-50%, -110%)',
         }"
       >
-        <div class="flex gap-1 rounded-lg border border-ink-700 bg-ink-800 p-1.5 shadow-xl">
+        <div class="flex items-center gap-1 rounded-lg border border-ink-700 bg-ink-800 p-1.5 shadow-xl">
+          <span class="px-1 text-[11px] font-semibold text-ink-400">{{ shotTypeLabel }}</span>
           <button
-            class="rounded bg-green-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-600"
+            class="rounded bg-green-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-600 active:scale-95"
             @click.stop="confirmShot(true)"
           >Made</button>
           <button
-            class="rounded bg-red-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700"
+            class="rounded bg-red-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700 active:scale-95"
             @click.stop="confirmShot(false)"
           >Miss</button>
           <button
@@ -259,6 +287,9 @@ function shotColor(shot: ShotEvent): string {
       </div>
     </div>
 
-    <p class="text-center text-xs text-ink-500">Tap court to place a shot · {{ displayShots.length }} shot{{ displayShots.length !== 1 ? 's' : '' }} recorded</p>
+    <p class="text-center text-xs text-ink-500">
+      {{ playerId ? 'Tap court to place a shot' : 'Select a player to record shots' }}
+      · {{ displayShots.length }} shot{{ displayShots.length !== 1 ? 's' : '' }}
+    </p>
   </div>
 </template>

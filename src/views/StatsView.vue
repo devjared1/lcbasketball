@@ -29,15 +29,14 @@ const PERIODS = [
   { label: 'OT', value: 5 },
 ]
 
-// ---- Shot chart: selected player filter ----
-const shotChartPlayerId = ref<string | null>(null)
-const showShotChart = ref(false)
-
 onMounted(async () => {
   await Promise.all([fetchPlayers(), fetchGames(), fetchAllEvents()])
 })
 
-// ----- roster -----
+// ----- roster drawer -----
+const showRosterDrawer = ref(false)
+
+// ----- roster management -----
 const newPlayerName = ref('')
 const newPlayerNumber = ref<number | null>(null)
 async function onAddPlayer() {
@@ -101,8 +100,6 @@ async function openGame(g: Game) {
   activeGame.value = g
   activePeriod.value = 1
   selectedPlayerId.value = null
-  shotChartPlayerId.value = null
-  showShotChart.value = false
   await Promise.all([fetchEvents(g.id), fetchSubEvents(g.id)])
 }
 
@@ -112,17 +109,8 @@ async function onDeleteGame(g: Game) {
   if (activeGame.value?.id === g.id) activeGame.value = null
 }
 
-// ----- live tracking -----
-const SCORING_STATS: { stat: StatType; label: string; tone: string }[] = [
-  { stat: 'fg_made',    label: '2FG+', tone: 'bg-home/20 text-home' },
-  { stat: 'fg_miss',   label: '2FG−', tone: 'bg-ink-700 text-ink-500' },
-  { stat: 'three_made', label: '3FG+', tone: 'bg-home/20 text-home' },
-  { stat: 'three_miss', label: '3FG−', tone: 'bg-ink-700 text-ink-500' },
-  { stat: 'ft_made',   label: 'FT+',  tone: 'bg-home/20 text-home' },
-  { stat: 'ft_miss',   label: 'FT−',  tone: 'bg-ink-700 text-ink-500' },
-]
-
-const OTHER_STATS: { stat: StatType; label: string; tone: string }[] = [
+// ----- non-shooting stat buttons (shooting handled by shot chart) -----
+const ACTION_STATS: { stat: StatType; label: string; tone: string }[] = [
   { stat: 'rebound_def', label: 'DREB', tone: 'bg-ink-700 text-chalk' },
   { stat: 'rebound_off', label: 'OREB', tone: 'bg-ink-700 text-chalk' },
   { stat: 'assist',      label: 'AST',  tone: 'bg-ink-700 text-chalk' },
@@ -203,29 +191,13 @@ const seasonStats = computed<SeasonRow[]>(() => {
     const ftPct = r.fta > 0 ? Math.round((r.ftm / r.fta) * 100) + '%' : '—'
 
     return {
-      player_id: r.player_id,
-      name: r.name,
-      number: r.number,
-      gp: actualGp,
-      pts: r.pts,
-      ppg,
-      fgm: r.fgm,
-      fga: r.fga,
-      fgPct,
-      tpm: r.tpm,
-      tpa: r.tpa,
-      tpPct,
-      ftm: r.ftm,
-      fta: r.fta,
-      ftPct,
-      reb: r.reb,
-      rpg,
-      ast: r.ast,
-      apg,
-      stl: r.stl,
-      blk: r.blk,
-      tov: r.tov,
-      pf: r.pf,
+      player_id: r.player_id, name: r.name, number: r.number,
+      gp: actualGp, pts: r.pts, ppg,
+      fgm: r.fgm, fga: r.fga, fgPct,
+      tpm: r.tpm, tpa: r.tpa, tpPct,
+      ftm: r.ftm, fta: r.fta, ftPct,
+      reb: r.reb, rpg, ast: r.ast, apg,
+      stl: r.stl, blk: r.blk, tov: r.tov, pf: r.pf,
     }
   })
 })
@@ -272,205 +244,124 @@ const seasonStats = computed<SeasonRow[]>(() => {
 
     <!-- ==================== GAME MODE ==================== -->
     <template v-if="mode === 'game'">
-      <div class="grid gap-5 lg:grid-cols-[280px_1fr]">
 
-        <!-- Left: Roster card (always visible in game mode) -->
-        <div class="card p-4">
-          <h2 class="mb-3 font-stencil font-bold">Roster</h2>
-          <ul class="mb-3 max-h-64 space-y-1 overflow-y-auto text-sm">
-            <li v-for="p in players" :key="p.id">
-              <template v-if="editingPlayerId === p.id">
-                <div class="flex gap-1">
-                  <input
-                    v-model.number="editPlayerNumber"
-                    type="number"
-                    placeholder="#"
-                    class="input w-12 py-1 text-center text-xs"
-                  />
-                  <input
-                    v-model="editPlayerName"
-                    class="input grow py-1 text-xs"
-                    @keyup.enter="saveEditPlayer(p.id)"
-                  />
-                  <button class="text-xs text-home" @click="saveEditPlayer(p.id)">Save</button>
-                  <button class="text-xs text-ink-500" @click="editingPlayerId = null">✕</button>
-                </div>
-              </template>
-              <template v-else>
-                <div class="flex items-center gap-1">
-                  <span class="w-7 shrink-0 text-right font-mono text-ink-500">{{ p.number ?? '—' }}</span>
-                  <span class="grow">{{ p.name }}</span>
-                  <button class="text-[10px] text-ink-500 hover:text-chalk" @click="startEditPlayer(p)">Edit</button>
-                  <button class="text-[10px] text-red-400 hover:text-red-300" @click="onDeletePlayer(p.id)">Del</button>
-                </div>
-              </template>
-            </li>
-          </ul>
-          <div class="flex gap-2">
-            <input v-model.number="newPlayerNumber" type="number" placeholder="#" class="input w-14 text-center" />
-            <input v-model="newPlayerName" placeholder="Player name" class="input grow" @keyup.enter="onAddPlayer" />
+      <!-- No active game: game cards grid -->
+      <template v-if="!activeGame">
+        <div v-if="!games.length" class="flex h-48 items-center justify-center rounded-2xl border border-dashed border-ink-700 text-sm text-ink-500">
+          No games yet — tap <strong class="mx-1 text-chalk">New Game</strong> to start tracking.
+        </div>
+        <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div
+            v-for="g in games"
+            :key="g.id"
+            class="group relative cursor-pointer rounded-2xl border border-ink-700 bg-ink-800 p-4 transition hover:border-ink-600 hover:bg-ink-700"
+            @click="openGame(g)"
+          >
+            <p class="font-stencil font-bold leading-tight">vs {{ g.opponent }}</p>
+            <p class="mt-1 text-xs text-ink-500">{{ g.played_on }}</p>
+            <button
+              class="absolute right-2 top-2 hidden rounded p-1 text-[10px] text-red-500 hover:text-red-300 group-hover:block"
+              @click.stop="onDeleteGame(g)"
+            >Del</button>
           </div>
-          <button class="btn-ghost mt-2 w-full py-1.5 text-xs" @click="onAddPlayer">Add player</button>
+        </div>
+      </template>
+
+      <!-- Active game -->
+      <template v-else>
+        <!-- Game header bar: back | name | period selector -->
+        <div class="flex flex-wrap items-center gap-2">
+          <button class="btn-ghost py-1 text-sm" @click="activeGame = null">← Games</button>
+          <span class="font-stencil font-bold">vs {{ activeGame.opponent }}</span>
+          <span class="text-sm text-ink-500">· {{ activeGame.played_on }}</span>
+          <div class="ml-auto flex items-center gap-1">
+            <button
+              v-for="p in PERIODS"
+              :key="p.value"
+              class="rounded px-2.5 py-1 text-xs font-bold transition"
+              :class="activePeriod === p.value
+                ? 'bg-rim text-white'
+                : 'bg-ink-700 text-ink-500 hover:text-chalk'"
+              @click="activePeriod = p.value"
+            >{{ p.label }}</button>
+            <button
+              class="ml-2 rounded-lg border border-ink-700 bg-ink-800 px-2.5 py-1 text-xs text-ink-400 hover:text-chalk"
+              @click="showRosterDrawer = true"
+            >☰ Roster</button>
+          </div>
         </div>
 
-        <!-- Right: Game grid (no game selected) or active game tracker -->
-        <div>
-          <!-- No active game: show game cards grid -->
-          <template v-if="!activeGame">
-            <div v-if="!games.length" class="flex h-48 items-center justify-center rounded-2xl border border-dashed border-ink-700 text-sm text-ink-500">
-              No games yet — tap <strong class="mx-1 text-chalk">New Game</strong> to start tracking.
-            </div>
-            <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <div
-                v-for="g in games"
-                :key="g.id"
-                class="group relative cursor-pointer rounded-2xl border border-ink-700 bg-ink-800 p-4 transition hover:border-ink-600 hover:bg-ink-700"
-                @click="openGame(g)"
-              >
-                <p class="font-stencil font-bold leading-tight">vs {{ g.opponent }}</p>
-                <p class="mt-1 text-xs text-ink-500">{{ g.played_on }}</p>
-                <button
-                  class="absolute right-2 top-2 hidden rounded p-1 text-[10px] text-red-500 hover:text-red-300 group-hover:block"
-                  @click.stop="onDeleteGame(g)"
-                >Del</button>
-              </div>
-            </div>
-          </template>
+        <!-- Sub picker (shown above main content when open) -->
+        <div v-if="subPickerOpen && selectedPlayer" class="rounded-xl border border-yellow-500/30 bg-ink-800 p-3">
+          <p class="mb-2 text-xs text-ink-500">
+            <span class="font-semibold text-yellow-400">{{ selectedPlayer.name }}</span> comes IN for:
+          </p>
+          <div class="flex flex-wrap gap-1.5">
+            <button
+              v-for="other in players.filter(op => op.id !== selectedPlayerId)"
+              :key="other.id"
+              class="rounded-lg bg-ink-700 px-3 py-1.5 text-xs text-chalk hover:bg-rim hover:text-white"
+              @click="doSub(other.id)"
+            >#{{ other.number ?? '—' }} {{ other.name }}</button>
+            <button class="text-xs text-ink-500 hover:text-chalk" @click="subPickerOpen = false">Cancel</button>
+          </div>
+        </div>
 
-          <!-- Active game -->
-          <template v-else>
-            <!-- Game header bar: back + name + period -->
-            <div class="mb-4 flex flex-wrap items-center gap-3">
-              <button
-                class="btn-ghost py-1 text-sm"
-                @click="activeGame = null"
-              >← Games</button>
-              <span class="font-stencil font-bold">vs {{ activeGame.opponent }}</span>
-              <span class="text-sm text-ink-500">· {{ activeGame.played_on }}</span>
-              <div class="ml-auto flex gap-1">
-                <button
-                  v-for="p in PERIODS"
-                  :key="p.value"
-                  class="rounded px-2.5 py-1 text-xs font-bold transition"
-                  :class="activePeriod === p.value
-                    ? 'bg-rim text-white'
-                    : 'bg-ink-700 text-ink-500 hover:text-chalk'"
-                  @click="activePeriod = p.value"
-                >{{ p.label }}</button>
-              </div>
-            </div>
+        <!-- Main content: slim stat pane + shot chart + box score -->
+        <div class="flex gap-3">
 
-            <!-- Stats toolbar card -->
-            <div class="mb-4 rounded-2xl border border-ink-700 bg-ink-800 p-4">
-              <!-- Selected player header -->
-              <div class="mb-3 flex items-center justify-between">
-                <div v-if="selectedPlayer" class="flex items-center gap-2">
-                  <span class="h-2 w-2 rounded-full bg-rim"></span>
-                  <span class="text-sm font-semibold">
-                    <span class="font-mono text-ink-500">#{{ selectedPlayer.number ?? '—' }}</span>
-                    {{ selectedPlayer.name }}
-                  </span>
+          <!-- Slim stat pane -->
+          <div class="flex w-[72px] shrink-0 flex-col gap-1.5">
+            <!-- Player badge -->
+            <div class="rounded-xl bg-ink-800 p-2 text-center">
+              <template v-if="selectedPlayer">
+                <div class="font-mono text-2xl font-black leading-none text-rim">
+                  {{ selectedPlayer.number ?? '—' }}
+                </div>
+                <div class="mt-0.5 truncate text-[9px] leading-tight text-ink-400">
+                  {{ selectedPlayer.name.split(' ')[0] }}
+                </div>
+                <div class="mt-1.5 flex justify-center gap-1">
                   <button
-                    class="ml-1 text-xs text-ink-500 hover:text-chalk"
+                    class="text-[9px] text-ink-500 hover:text-chalk"
                     title="Undo last stat"
                     @click="undoLastFor(selectedPlayerId!)"
                   >undo</button>
-                </div>
-                <p v-else class="text-xs italic text-ink-500">↓ Tap a player in the box score to select</p>
-                <button
-                  v-if="selectedPlayer"
-                  class="rounded border px-2.5 py-1 text-xs transition"
-                  :class="subPickerOpen
-                    ? 'border-yellow-500 text-yellow-400'
-                    : 'border-ink-600 text-ink-500 hover:border-chalk hover:text-chalk'"
-                  @click="subPickerOpen = !subPickerOpen"
-                >Sub ↕</button>
-              </div>
-
-              <!-- Sub picker -->
-              <div v-if="subPickerOpen && selectedPlayer" class="mb-3 rounded-lg bg-ink-900 p-2">
-                <p class="mb-1.5 text-xs text-ink-500">
-                  <span class="text-yellow-400">{{ selectedPlayer.name }}</span> comes IN for:
-                </p>
-                <div class="flex flex-wrap gap-1">
+                  <span class="text-ink-700">·</span>
                   <button
-                    v-for="other in players.filter(op => op.id !== selectedPlayerId)"
-                    :key="other.id"
-                    class="rounded bg-ink-700 px-2 py-1 text-xs text-chalk hover:bg-rim hover:text-white"
-                    @click="doSub(other.id)"
-                  >#{{ other.number ?? '—' }} {{ other.name }}</button>
-                  <button class="text-xs text-ink-500 hover:text-chalk" @click="subPickerOpen = false">Cancel</button>
+                    class="text-[9px] transition"
+                    :class="subPickerOpen ? 'text-yellow-400' : 'text-ink-500 hover:text-chalk'"
+                    @click="subPickerOpen = !subPickerOpen"
+                  >sub</button>
                 </div>
-              </div>
-
-              <!-- Scoring buttons -->
-              <div class="mb-1.5 grid grid-cols-6 gap-1.5">
-                <button
-                  v-for="b in SCORING_STATS"
-                  :key="b.stat"
-                  class="rounded-xl py-3 text-xs font-semibold transition"
-                  :class="[b.tone, selectedPlayerId ? 'hover:brightness-125 active:scale-95' : 'cursor-default opacity-30']"
-                  :disabled="!selectedPlayerId"
-                  @click="tap(b.stat)"
-                >{{ b.label }}</button>
-              </div>
-              <!-- Other stat buttons -->
-              <div class="grid grid-cols-7 gap-1.5">
-                <button
-                  v-for="b in OTHER_STATS"
-                  :key="b.stat"
-                  class="rounded-xl py-3 text-xs font-semibold transition"
-                  :class="[b.tone, selectedPlayerId ? 'hover:brightness-125 active:scale-95' : 'cursor-default opacity-30']"
-                  :disabled="!selectedPlayerId"
-                  @click="tap(b.stat)"
-                >{{ b.label }}</button>
-              </div>
-
-              <!-- Sub log summary -->
-              <div v-if="subEvents.length > 0" class="mt-3 rounded-lg bg-ink-900 p-2">
-                <p class="mb-1 text-xs font-semibold text-ink-500">Substitutions</p>
-                <ul class="space-y-0.5 text-xs text-ink-500">
-                  <li v-for="sub in subEvents" :key="sub.id">
-                    Q{{ sub.period }}: {{ players.find(p => p.id === sub.player_id_in)?.name ?? 'Unknown' }}
-                    IN for {{ players.find(p => p.id === sub.player_id_out)?.name ?? 'Unknown' }}
-                  </li>
-                </ul>
+              </template>
+              <div v-else class="py-2 text-[9px] italic leading-tight text-ink-500">
+                Pick a player ↓
               </div>
             </div>
 
-            <!-- Box score table (clickable rows to select player) -->
+            <!-- Non-shooting action buttons -->
+            <button
+              v-for="b in ACTION_STATS"
+              :key="b.stat"
+              class="rounded-lg py-2.5 text-[11px] font-semibold transition"
+              :class="[b.tone, selectedPlayerId ? 'hover:brightness-125 active:scale-95' : 'cursor-default opacity-30']"
+              :disabled="!selectedPlayerId"
+              @click="tap(b.stat)"
+            >{{ b.label }}</button>
+          </div>
+
+          <!-- Shot chart + box score -->
+          <div class="min-w-0 flex-1 flex flex-col gap-4">
+            <ShotChart
+              :game-id="activeGame.id"
+              :player-id="selectedPlayerId"
+              :period="activePeriod"
+            />
+
+            <!-- Box score (clickable rows to select player) -->
             <div class="card overflow-x-auto p-4">
-              <div class="mb-3 flex items-center justify-between">
-                <h2 class="font-stencil font-bold">Box Score</h2>
-                <button
-                  class="text-xs text-ink-500 hover:text-chalk"
-                  @click="showShotChart = !showShotChart"
-                >{{ showShotChart ? 'Hide' : 'Show' }} shot chart</button>
-              </div>
-
-              <!-- Shot chart -->
-              <div v-if="showShotChart" class="mb-4">
-                <div class="mb-2 flex flex-wrap items-center gap-1">
-                  <button
-                    class="rounded px-2 py-0.5 text-xs transition"
-                    :class="shotChartPlayerId === null ? 'bg-ink-600 text-chalk' : 'text-ink-500 hover:text-chalk'"
-                    @click="shotChartPlayerId = null"
-                  >All</button>
-                  <button
-                    v-for="p in players"
-                    :key="p.id"
-                    class="rounded px-2 py-0.5 text-xs transition"
-                    :class="shotChartPlayerId === p.id ? 'bg-rim text-white' : 'bg-ink-700 text-ink-500 hover:text-chalk'"
-                    @click="shotChartPlayerId = p.id"
-                  >#{{ p.number ?? '—' }} {{ p.name }}</button>
-                </div>
-                <ShotChart
-                  :game-id="activeGame.id"
-                  :player-id="shotChartPlayerId"
-                  :period="activePeriod"
-                />
-              </div>
-
+              <h2 class="mb-3 font-stencil font-bold">Box Score</h2>
               <table class="w-full text-right font-mono text-sm">
                 <thead class="text-ink-500">
                   <tr class="border-b border-ink-700">
@@ -503,9 +394,20 @@ const seasonStats = computed<SeasonRow[]>(() => {
                 </tbody>
               </table>
             </div>
-          </template>
+
+            <!-- Sub log -->
+            <div v-if="subEvents.length > 0" class="rounded-xl bg-ink-800 p-3">
+              <p class="mb-1 text-xs font-semibold text-ink-500">Substitutions</p>
+              <ul class="space-y-0.5 text-xs text-ink-500">
+                <li v-for="sub in subEvents" :key="sub.id">
+                  Q{{ sub.period }}: {{ players.find(p => p.id === sub.player_id_in)?.name ?? 'Unknown' }}
+                  IN for {{ players.find(p => p.id === sub.player_id_out)?.name ?? 'Unknown' }}
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
-      </div>
+      </template>
     </template>
 
     <!-- ==================== SEASON MODE ==================== -->
@@ -521,17 +423,12 @@ const seasonStats = computed<SeasonRow[]>(() => {
               <th title="Games Played">GP</th>
               <th>PTS</th>
               <th title="Points per game">PPG</th>
-              <th>FG%</th>
-              <th>3P%</th>
-              <th>FT%</th>
+              <th>FG%</th><th>3P%</th><th>FT%</th>
               <th>REB</th>
               <th title="Rebounds per game">RPG</th>
               <th>AST</th>
               <th title="Assists per game">APG</th>
-              <th>STL</th>
-              <th>BLK</th>
-              <th>TOV</th>
-              <th>PF</th>
+              <th>STL</th><th>BLK</th><th>TOV</th><th>PF</th>
             </tr>
           </thead>
           <tbody>
@@ -552,17 +449,12 @@ const seasonStats = computed<SeasonRow[]>(() => {
               <td class="text-ink-500">{{ r.gp }}</td>
               <td class="font-bold text-chalk">{{ r.pts }}</td>
               <td class="font-semibold text-rim">{{ r.ppg }}</td>
-              <td>{{ r.fgPct }}</td>
-              <td>{{ r.tpPct }}</td>
-              <td>{{ r.ftPct }}</td>
+              <td>{{ r.fgPct }}</td><td>{{ r.tpPct }}</td><td>{{ r.ftPct }}</td>
               <td>{{ r.reb }}</td>
               <td class="text-ink-500">{{ r.rpg }}</td>
               <td>{{ r.ast }}</td>
               <td class="text-ink-500">{{ r.apg }}</td>
-              <td>{{ r.stl }}</td>
-              <td>{{ r.blk }}</td>
-              <td>{{ r.tov }}</td>
-              <td>{{ r.pf }}</td>
+              <td>{{ r.stl }}</td><td>{{ r.blk }}</td><td>{{ r.tov }}</td><td>{{ r.pf }}</td>
             </tr>
           </tbody>
         </table>
@@ -612,18 +504,84 @@ const seasonStats = computed<SeasonRow[]>(() => {
           </div>
           <div>
             <label class="label" for="ng-date">Date</label>
-            <input
-              id="ng-date"
-              v-model="newDate"
-              type="date"
-              class="input"
-            />
+            <input id="ng-date" v-model="newDate" type="date" class="input" />
           </div>
           <button
             class="btn-primary py-3 text-sm font-semibold"
             :disabled="!newOpponent.trim()"
             @click="onCreateGame"
           >Start game</button>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- Roster slide-out drawer -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition-opacity duration-300 ease-out"
+      enter-from-class="opacity-0"
+      leave-active-class="transition-opacity duration-200 ease-in"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="showRosterDrawer"
+        class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+        @click="showRosterDrawer = false"
+      />
+    </Transition>
+    <Transition
+      enter-active-class="transition-transform duration-300 ease-out"
+      enter-from-class="-translate-x-full"
+      leave-active-class="transition-transform duration-200 ease-in"
+      leave-to-class="-translate-x-full"
+    >
+      <div
+        v-if="showRosterDrawer"
+        class="fixed bottom-0 left-0 top-0 z-50 w-72 overflow-y-auto border-r border-ink-700 bg-ink-900 p-4 shadow-2xl"
+      >
+        <div class="mb-4 flex items-center justify-between">
+          <h2 class="font-stencil text-lg font-bold">Roster</h2>
+          <button class="btn-ghost py-1 text-sm" @click="showRosterDrawer = false">✕</button>
+        </div>
+
+        <ul class="mb-4 space-y-1 text-sm">
+          <li v-for="p in players" :key="p.id">
+            <template v-if="editingPlayerId === p.id">
+              <div class="flex gap-1">
+                <input
+                  v-model.number="editPlayerNumber"
+                  type="number"
+                  placeholder="#"
+                  class="input w-12 py-1 text-center text-xs"
+                />
+                <input
+                  v-model="editPlayerName"
+                  class="input grow py-1 text-xs"
+                  @keyup.enter="saveEditPlayer(p.id)"
+                />
+                <button class="text-xs text-home" @click="saveEditPlayer(p.id)">Save</button>
+                <button class="text-xs text-ink-500" @click="editingPlayerId = null">✕</button>
+              </div>
+            </template>
+            <template v-else>
+              <div class="flex items-center gap-1.5 rounded-lg px-2 py-1.5 hover:bg-ink-800">
+                <span class="w-7 shrink-0 text-right font-mono text-ink-500">{{ p.number ?? '—' }}</span>
+                <span class="grow">{{ p.name }}</span>
+                <button class="text-[10px] text-ink-500 hover:text-chalk" @click="startEditPlayer(p)">Edit</button>
+                <button class="text-[10px] text-red-400 hover:text-red-300" @click="onDeletePlayer(p.id)">Del</button>
+              </div>
+            </template>
+          </li>
+        </ul>
+
+        <div class="border-t border-ink-700 pt-4">
+          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">Add player</p>
+          <div class="flex gap-2">
+            <input v-model.number="newPlayerNumber" type="number" placeholder="#" class="input w-14 text-center" />
+            <input v-model="newPlayerName" placeholder="Name" class="input grow" @keyup.enter="onAddPlayer" />
+          </div>
+          <button class="btn-ghost mt-2 w-full py-1.5 text-xs" @click="onAddPlayer">Add player</button>
         </div>
       </div>
     </Transition>
