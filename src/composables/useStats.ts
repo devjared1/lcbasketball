@@ -21,7 +21,8 @@ export function useStats() {
     const { data, error: err } = await supabase
       .from('players')
       .select('*')
-      .order('number', { ascending: true })
+      .order('number', { ascending: true, nullsFirst: false })
+      .order('name', { ascending: true })
     if (err) error.value = err.message
     else players.value = (data ?? []) as Player[]
   }
@@ -57,18 +58,14 @@ export function useStats() {
       error.value = err.message
       return null
     }
-    players.value = [...players.value, data as Player].sort(
-      (a, b) => (a.number ?? 999) - (b.number ?? 999),
-    )
+    await fetchPlayers()
     return data as Player
   }
 
   async function updatePlayer(id: string, patch: Partial<Omit<Player, 'id'>>): Promise<Player | null> {
     const { data, error: err } = await supabase.from('players').update(patch).eq('id', id).select().single()
     if (err) { error.value = err.message; return null }
-    players.value = players.value
-      .map((p) => (p.id === id ? (data as Player) : p))
-      .sort((a, b) => (a.number ?? 999) - (b.number ?? 999))
+    await fetchPlayers()
     return data as Player
   }
 
