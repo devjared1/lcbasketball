@@ -3,10 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import type { PracticePlan, PracticePlanItem } from '@/types'
 import { usePracticePlan } from '@/composables/usePracticePlan'
 import { usePlays } from '@/composables/usePlays'
+import { useConfirm } from '@/composables/useConfirm'
 import CourtCanvas from '@/components/CourtCanvas.vue'
 
 const { plans, items, error, fetchPlans, fetchPlanItems, createPlan, deletePlan, addItem, updateItem, deleteItem, reorderItems } = usePracticePlan()
 const { plays, fetchPlays } = usePlays()
+const { confirm } = useConfirm()
 
 const activePlan = ref<PracticePlan | null>(null)
 const newPlanName = ref('')
@@ -39,7 +41,13 @@ async function openPlan(p: PracticePlan) {
 }
 
 async function onDeletePlan(p: PracticePlan) {
-  if (!confirm(`Delete "${p.name}"?`)) return
+  const ok = await confirm({
+    title: 'Delete plan',
+    message: `Delete "${p.name}"?`,
+    confirmText: 'Delete',
+    tone: 'danger',
+  })
+  if (!ok) return
   await deletePlan(p.id)
   if (activePlan.value?.id === p.id) activePlan.value = null
 }

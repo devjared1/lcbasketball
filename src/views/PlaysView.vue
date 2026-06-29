@@ -3,12 +3,14 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Play } from '@/types'
 import { usePlays } from '@/composables/usePlays'
+import { useConfirm } from '@/composables/useConfirm'
 import CourtCanvas from '@/components/CourtCanvas.vue'
 import PlayAnimator from '@/components/PlayAnimator.vue'
 import { PencilIcon, DocumentDuplicateIcon, PlayIcon, TrashIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
 const { plays, loading, error, fetchPlays, deletePlay, duplicatePlay } = usePlays()
+const { confirm } = useConfirm()
 
 // ---- tabs: playbook vs. scouting ----
 const activeTab = ref<'playbook' | 'scouting'>('playbook')
@@ -33,7 +35,13 @@ const filteredPlays = computed(() => {
 onMounted(fetchPlays)
 
 async function onDelete(p: Play) {
-  if (!confirm(`Delete "${p.name}"? This also removes its clips.`)) return
+  const ok = await confirm({
+    title: 'Delete play',
+    message: `Delete "${p.name}"? This also removes its clips.`,
+    confirmText: 'Delete',
+    tone: 'danger',
+  })
+  if (!ok) return
   await deletePlay(p.id)
 }
 
@@ -145,14 +153,14 @@ function onDragEnd() {
       <article
         v-for="p in sortedFiltered"
         :key="p.id"
-        class="card cursor-grab overflow-hidden active:cursor-grabbing h-[400px]"
+        class="card cursor-grab overflow-hidden active:cursor-grabbing h-[375px] py-1"
         :class="draggingId === p.id ? 'opacity-40 ring-2 ring-rim' : ''"
         draggable="true"
         @dragstart="onDragStart($event, p)"
         @dragover="onDragOver($event, p)"
         @dragend="onDragEnd"
       >
-        <div class="pointer-events-none h-72 w-2/3 mx-auto overflow-hidden bg-court-wood">
+        <div class="pointer-events-none w-2/3 mx-auto overflow-hidden bg-court-wood rounded-lg">
           <CourtCanvas :model-value="p.diagram" :editable="false" :total-phases="phaseCount(p)" />
         </div>
         <div class="p-3">

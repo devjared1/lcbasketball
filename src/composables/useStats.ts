@@ -160,17 +160,19 @@ export function useStats() {
     return true
   }
 
-  async function undoLastFor(playerId: string): Promise<boolean> {
+  // Returns the deleted event so callers can undo paired records (e.g. the
+  // shot_event that a shooting stat was recorded alongside).
+  async function undoLastFor(playerId: string): Promise<StatEvent | null> {
     const playerEvents = events.value.filter((e) => e.player_id === playerId)
     const last = playerEvents[playerEvents.length - 1]
-    if (!last) return false
+    if (!last) return null
     const { error: err } = await supabase.from('stat_events').delete().eq('id', last.id)
     if (err) {
       error.value = err.message
-      return false
+      return null
     }
     events.value = events.value.filter((e) => e.id !== last.id)
-    return true
+    return last
   }
 
   return {

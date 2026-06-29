@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppNav from '@/components/AppNav.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 </script>
 
 <template>
@@ -7,4 +8,5 @@ import AppNav from '@/components/AppNav.vue'
     <RouterView />
   </main>
   <AppNav />
+  <ConfirmDialog />
 </template>

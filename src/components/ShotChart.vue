@@ -26,8 +26,8 @@ const THREE_CORNER_X = 44
 const THREE_ARC_Y_HALF = 182
 
 // Free throw line y in SVG units
-const FT_Y_SVG = KEY_LENGTH + BASKET_INSET - BOUNDARY  // 240
-const FT_Y_TOLERANCE = 25
+const FT_Y_SVG = KEY_LENGTH + BASKET_INSET
+const FT_Y_TOLERANCE = 12
 const PAINT_HALF_W = KEY_HALF_W + 5
 
 // Pending shot placement
@@ -45,11 +45,43 @@ const displayShots = computed<ShotEvent[]>(() => {
 
 // FG% summary
 const fgSummary = computed(() => {
-  const made = displayShots.value.filter((s) => s.made).length
-  const total = displayShots.value.length
+  const made = only2FGS(displayShots.value.filter((s) => s.made)).length
+  const total = only2FGS(displayShots.value).length
   const pct = total > 0 ? Math.round((made / total) * 100) : 0
   return { made, total, pct }
 })
+
+const threeFGSummary = computed(() => {
+  const made = only3FGS(displayShots.value.filter((s) => s.made)).length
+  const total = only3FGS(displayShots.value).length
+  const pct = total > 0 ? Math.round((made / total) * 100) : 0
+  return { made, total, pct }
+})
+
+const ftSummary = computed(() => {
+  const made = onlyFTS(displayShots.value.filter((s) => s.made)).length
+  const total = onlyFTS(displayShots.value).length
+  const pct = total > 0 ? Math.round((made / total) * 100) : 0
+  return { made, total, pct }
+})
+
+function onlyFTS(shots: ShotEvent[]): ShotEvent[] {
+  return shots.filter(s => {
+    return getShotType(s.x, s.y) === 'ft'
+  })
+}
+
+function only2FGS(shots: ShotEvent[]): ShotEvent[] {
+  return shots.filter(s => {
+    return getShotType(s.x, s.y) !== 'ft'
+  })
+}
+
+function only3FGS(shots: ShotEvent[]): ShotEvent[] {
+  return shots.filter(s => {
+    return getShotType(s.x, s.y) === 'three'
+  })
+}
 
 function svgToNorm(svgX: number, svgY: number) {
   return { x: svgX / VB_W, y: svgY / VB_H }
@@ -74,8 +106,8 @@ function getShotType(nx: number, ny: number): 'ft' | 'two' | 'three' {
   // Near the free throw line and within the paint width
   if (
     Math.abs(svgY - FT_Y_SVG) < FT_Y_TOLERANCE &&
-    svgX > VB_W / 2 - PAINT_HALF_W &&
-    svgX < VB_W / 2 + PAINT_HALF_W
+    svgX > VB_W / 2 - (PAINT_HALF_W - 40) &&
+    svgX < VB_W / 2 + (PAINT_HALF_W - 40)
   ) {
     return 'ft'
   }
@@ -130,31 +162,51 @@ async function confirmShot(made: boolean) {
 function cancelPending() {
   pendingShot.value = null
 }
-
-function shotColor(shot: ShotEvent): string {
-  if (!shot.made) return '#ef4444'
-  return isThreePointer(shot.x, shot.y) ? '#3b82f6' : '#16a34a'
-}
 </script>
 
 <template>
-  <div class="flex flex-col gap-2">
+  <div class="flex flex-col gap-2 w-full h-1/2 lg:h-full lg:w-1/2">
     <!-- FG% summary bar -->
     <div class="flex items-center gap-4 text-xs">
-      <span class="text-ink-500">
-        FG: <span class="font-mono text-chalk">{{ fgSummary.made }}/{{ fgSummary.total }}</span>
-      </span>
-      <span class="text-ink-500">
-        FG%: <span class="font-mono font-bold" :class="fgSummary.pct >= 50 ? 'text-green-400' : 'text-chalk'">
-          {{ fgSummary.pct }}%
-        </span>
-      </span>
-      <span class="ml-auto flex items-center gap-2 text-ink-500">
+      <div class="flex flex-col gap-1">
+        <div class="flex gap-2 w-full">
+          <span class="text-ink-500">
+            FG:<span class="font-mono text-chalk">{{ fgSummary.made }}/{{ fgSummary.total }}</span>
+          </span>
+          <span class="text-ink-500 ml-auto">
+            FG%:<span class="font-mono font-bold" :class="fgSummary.pct < 40 ? `${fgSummary.pct >= 30 ? 'text-orange-400' : 'text-rim'}` : 'text-green-400'">
+              {{ fgSummary.pct }}%
+            </span>
+          </span>
+        </div>
+        <div class="flex gap-2 w-full">
+          <span class="text-ink-500">
+            3FG: <span class="font-mono text-chalk">{{ threeFGSummary.made }}/{{ threeFGSummary.total }}</span>
+          </span>
+          <span class="text-ink-500 ml-auto">
+            3FG%: <span class="font-mono font-bold" :class="threeFGSummary.pct < 30 ? `${threeFGSummary.pct >= 20 ? 'text-orange-400' : 'text-rim'}` : 'text-green-400'">
+              {{ threeFGSummary.pct }}%
+            </span>
+          </span>
+        </div>
+        <div class="flex gap-2 w-full">
+          <span class="text-ink-500">
+            FT: <span class="font-mono text-chalk">{{ ftSummary.made }}/{{ ftSummary.total }}</span>
+          </span>
+          <span class="text-ink-500 ml-auto">
+            FT%: <span class="font-mono font-bold" :class="ftSummary.pct < 70 ? `${ftSummary.pct >= 20 ? 'text-orange-400' : 'text-rim'}` : 'text-green-400'">
+              {{ ftSummary.pct }}%
+            </span>
+          </span>
+        </div>
+      </div>
+      <p class="text-center text-xs text-ink-500 mx-auto hidden md:block">
+        {{ playerId ? 'Tap court to place a shot' : 'Select a player to record shots' }}
+        · {{ displayShots.length }} shot{{ displayShots.length !== 1 ? 's' : '' }}
+      </p>
+      <span class="ml-auto flex flex-col items-center gap-2 text-ink-500 leading-3">
         <span class="inline-flex items-center gap-1">
-          <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#16a34a"/></svg> 2pt
-        </span>
-        <span class="inline-flex items-center gap-1">
-          <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#3b82f6"/></svg> 3pt
+          <svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#16a34a"/></svg>Make
         </span>
         <span class="inline-flex items-center gap-1">
           <svg width="10" height="10">
@@ -169,7 +221,7 @@ function shotColor(shot: ShotEvent): string {
     <div class="relative w-full">
       <svg
         :viewBox="`0 0 ${VB_W} ${VB_H}`"
-        class="w-full rounded-lg border border-ink-700 bg-ink-900"
+        class="w-full rounded-lg border border-ink-700 bg-ink-900 h-60 md:h-72 lg:h-full"
         :class="playerId ? 'cursor-crosshair' : 'cursor-default'"
         preserveAspectRatio="xMidYMid meet"
         @click="onCourtClick"
@@ -182,6 +234,24 @@ function shotColor(shot: ShotEvent): string {
         <rect :x="VB_W / 2 - KEY_HALF_W" :y="BOUNDARY" :width="KEY_HALF_W * 2"
           :height="KEY_LENGTH + BASKET_INSET - BOUNDARY"
           fill="none" stroke="#374151" stroke-width="1.5"/>
+          
+        <!-- Paint Outside Lines: Left Side -->
+        <rect :x="VB_W / 2 - KEY_HALF_W - 10" :y="BOUNDARY+80" :width="10"
+          :height="KEY_LENGTH / 10"
+          fill="#374151" stroke="#374151" stroke-width="1.5"/>
+        <line :x1="VB_W / 2 - KEY_HALF_W - 10" :y1="BOUNDARY+140" :x2="VB_W / 2 - KEY_HALF_W" :y2="BOUNDARY+140"
+          stroke="#374151" stroke-width="3"/>
+        <line :x1="VB_W / 2 - KEY_HALF_W - 10" :y1="BOUNDARY+180" :x2="VB_W / 2 - KEY_HALF_W" :y2="BOUNDARY+180"
+          stroke="#374151" stroke-width="3"/>
+
+        <!-- Paint Outside Lines: Right Side -->
+        <rect :x="VB_W / 2 + KEY_HALF_W" :y="BOUNDARY+80" :width="10"
+          :height="KEY_LENGTH / 10"
+          fill="#374151" stroke="#374151" stroke-width="1.5"/>
+        <line :x1="VB_W / 2 + KEY_HALF_W" :y1="BOUNDARY+140" :x2="VB_W / 2 + KEY_HALF_W + 10" :y2="BOUNDARY+140"
+          stroke="#374151" stroke-width="3"/>
+        <line :x1="VB_W / 2 + KEY_HALF_W" :y1="BOUNDARY+180" :x2="VB_W / 2 + KEY_HALF_W + 10" :y2="BOUNDARY+180"
+          stroke="#374151" stroke-width="3"/>
 
         <!-- Free throw circle -->
         <circle :cx="VB_W / 2" :cy="KEY_LENGTH + BASKET_INSET - BOUNDARY" :r="LANE_ARC_R"
@@ -205,7 +275,7 @@ function shotColor(shot: ShotEvent): string {
 
         <!-- Restricted area arc -->
         <path
-          :d="`M ${VB_W / 2 - 40} ${BASKET_INSET} A 40 40 0 0 1 ${VB_W / 2 + 40} ${BASKET_INSET}`"
+          :d="`M ${VB_W / 2 - 40} ${BASKET_INSET} A 40 40 0 0 0 ${VB_W / 2 + 40} ${BASKET_INSET}`"
           fill="none" stroke="#374151" stroke-width="1" stroke-dasharray="4 3"/>
 
         <!-- Shot markers -->
@@ -215,7 +285,7 @@ function shotColor(shot: ShotEvent): string {
               :cx="shot.x * VB_W"
               :cy="shot.y * VB_H"
               r="7"
-              :fill="shotColor(shot)"
+              fill="#16a34a"
               fill-opacity="0.85"
               stroke="white"
               stroke-width="0.5"
@@ -248,16 +318,6 @@ function shotColor(shot: ShotEvent): string {
         />
       </svg>
 
-      <!-- No player hint overlay -->
-      <div
-        v-if="!playerId"
-        class="pointer-events-none absolute inset-0 flex items-end justify-center pb-3"
-      >
-        <span class="rounded-full bg-ink-900/80 px-3 py-1 text-xs text-ink-500">
-          Tap a player in the box score to record shots
-        </span>
-      </div>
-
       <!-- Made / Miss popup near pending shot -->
       <div
         v-if="pendingShot"
@@ -285,10 +345,5 @@ function shotColor(shot: ShotEvent): string {
         </div>
       </div>
     </div>
-
-    <p class="text-center text-xs text-ink-500">
-      {{ playerId ? 'Tap court to place a shot' : 'Select a player to record shots' }}
-      · {{ displayShots.length }} shot{{ displayShots.length !== 1 ? 's' : '' }}
-    </p>
   </div>
 </template>

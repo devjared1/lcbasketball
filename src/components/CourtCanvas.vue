@@ -10,6 +10,9 @@ import type {
   Point,
 } from '@/types'
 import { ArrowUturnLeftIcon, TrashIcon, ArrowDownTrayIcon, PlayIcon, HandRaisedIcon, PencilIcon, ArrowUpRightIcon, UserPlusIcon } from '@heroicons/vue/24/outline';
+import { useConfirm } from '@/composables/useConfirm'
+
+const { confirm } = useConfirm()
 
 // add optional prop for whiteboard view, use pen tool only
 const props = defineProps<{ modelValue: Diagram; editable?: boolean; totalPhases: number; tool?: Tool }>()
@@ -160,12 +163,19 @@ function commit(next: DiagramElement[]) {
   emit('update:modelValue', { ...props.modelValue, elements: next })
 }
 
-function setCourt(type: CourtType) {
+async function setCourt(type: CourtType) {
   if (props.modelValue.courtType === type) return
   const hasContent =
     elements.value.length > 0 ||
     (props.modelValue.phases?.some((p) => p.length > 0) ?? false)
-  if (hasContent && !confirm('Switching court type will clear all phases. Continue?')) return
+  if (hasContent) {
+    const ok = await confirm({
+      title: 'Switch court type',
+      message: 'Switching court type will clear all phases. Continue?',
+      confirmText: 'Switch',
+    })
+    if (!ok) return
+  }
   emit('update:modelValue', { courtType: type, elements: [] })
 }
 
@@ -492,11 +502,15 @@ const TEMPLATES: Record<TemplateName, { x: number; y: number; label: string; typ
   ]
 }
 
-function applyTemplate(name: TemplateName) {
-  if (
-    elements.value.length > 0 &&
-    !confirm('This will replace existing diagram elements. Continue?')
-  ) return
+async function applyTemplate(name: TemplateName) {
+  if (elements.value.length > 0) {
+    const ok = await confirm({
+      title: 'Apply template',
+      message: 'This will replace existing diagram elements. Continue?',
+      confirmText: 'Replace',
+    })
+    if (!ok) return
+  }
   commit(TEMPLATES[name].map((pos) => ({
     id: crypto.randomUUID(),
     type: 'marker' as const,

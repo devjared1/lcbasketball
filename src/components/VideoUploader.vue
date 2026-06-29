@@ -2,9 +2,11 @@
 import { ref } from 'vue'
 import type { Play, PlayVideo } from '@/types'
 import { usePlays } from '@/composables/usePlays'
+import { useConfirm } from '@/composables/useConfirm'
 
 const props = defineProps<{ play: Play }>()
 const { uploadVideo, deleteVideo } = usePlays()
+const { confirm } = useConfirm()
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const title = ref('')
@@ -35,7 +37,13 @@ async function onPick(e: Event) {
 }
 
 async function remove(v: PlayVideo) {
-  if (!confirm(`Remove clip "${v.title ?? 'untitled'}"?`)) return
+  const ok = await confirm({
+    title: 'Remove clip',
+    message: `Remove clip "${v.title ?? 'untitled'}"?`,
+    confirmText: 'Remove',
+    tone: 'danger',
+  })
+  if (!ok) return
   await deleteVideo(v)
 }
 </script>
