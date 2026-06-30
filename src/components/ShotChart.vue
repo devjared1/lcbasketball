@@ -165,9 +165,9 @@ function cancelPending() {
 </script>
 
 <template>
-  <div class="flex flex-col gap-2 w-full h-1/2 lg:h-full lg:w-1/2">
+  <div class="flex flex-col gap-2 w-full shotchart-container lg:h-full lg:w-1/2">
     <!-- FG% summary bar -->
-    <div class="flex items-center gap-4 text-xs">
+    <div class="items-center gap-4 text-xs hidden md:flex">
       <div class="flex flex-col gap-1">
         <div class="flex gap-2 w-full">
           <span class="text-ink-500">
@@ -221,7 +221,7 @@ function cancelPending() {
     <div class="relative w-full">
       <svg
         :viewBox="`0 0 ${VB_W} ${VB_H}`"
-        class="w-full rounded-lg border border-ink-700 bg-ink-900 h-60 md:h-72 lg:h-full"
+        class="w-full rounded-lg bg-ink-900 shotchart"
         :class="playerId ? 'cursor-crosshair' : 'cursor-default'"
         preserveAspectRatio="xMidYMid meet"
         @click="onCourtClick"

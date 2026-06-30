@@ -59,6 +59,38 @@ input[type='number']::-webkit-inner-spin-button {
   @apply rounded-2xl border border-ink-700/60 bg-ink-800;
 }
 
+.boxscore-shotchart-container {
+  height: calc(100dvh - 210px)
+}
+
+.boxscore, .shotchart-container {
+  height: 50%
+}
+
+.shotchart {
+  height: calc((100dvh - 250px) / 2)
+}
+
+@media (min-width: 768px) {
+  .shotchart {
+    height: calc((100dvh - 350px) / 2)
+  } 
+}
+
+@media (min-width: 1024px) {
+  .shotchart-container {
+    height: calc(100dvh - 230px)
+  }
+  
+  .boxscore {
+    height: fit-content
+  }
+
+  .shotchart {
+    height: calc(100dvh - 282px)
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.001ms !important;

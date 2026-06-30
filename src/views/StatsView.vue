@@ -8,7 +8,7 @@ import { buildBoxScore, boxScoreToCsv, downloadCsv } from '@/lib/stats-utils'
 import ShotChart from '@/components/ShotChart.vue'
 import StatFlash from '@/components/StatFlash.vue'
 import TrashIcon from '@heroicons/vue/24/outline/TrashIcon'
-import { ArrowLeftIcon, CheckIcon, PencilIcon, UserGroupIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, ArrowUturnLeftIcon, CheckIcon, FolderArrowDownIcon, PencilIcon, UserGroupIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 
 const {
   players, games, events, allEvents, subEvents, error,
@@ -342,16 +342,31 @@ const seasonStats = computed<SeasonRow[]>(() => {
   <section class="flex flex-col gap-4">
     <!-- Sticky page header -->
     <div
-      class="sticky top-0 z-10 -mx-4 flex items-center gap-3 border-b border-ink-700/60 bg-ink-900/95 px-4 pt-6 pb-1 backdrop-blur-xl">
-      <h1 class="font-stencil text-xl font-bold capitalize leading-tight">Stats</h1>
+      class="sticky top-0 z-10 -mx-4 flex items-center gap-3 bg-ink-900/95 px-4 pt-6 pb-1 backdrop-blur-xl">
+      <h1 v-if="!activeGame" class="font-stencil text-xl font-bold capitalize leading-tight">Stats</h1>
       <button
         v-if="activeGame"
         class="inline-flex items-center justify-center gap-1 rounded-md px-3 py-1.5 text-xs" @click="activeGame = null">
-        <ArrowLeftIcon class="h-5 w-5 text-gray-400" />
-        <span class="text-gray-400 text-[clamp(0.875rem,2vw,1.15rem)] font-stencil uppercase font-bold">Games</span>
+        <ArrowLeftIcon class="h-5 w-5 text-chalk" />
+        <span class="text-chalk text-[clamp(0.875rem,2vw,1.15rem)] font-stencil uppercase font-bold">Games</span>
+      </button>
+      <span class="grow"></span>
+      <button
+        v-if="activeGame && selectedPlayer && shots.filter((s) => s.player_id === selectedPlayerId).length > 0"
+        class="inline-flex items-center justify-center gap-1 rounded-md px-3 bg-away py-1 text-xs hover:bg-away/90"
+        title="Undo last stat"
+        @click="onUndo(selectedPlayerId!)">
+        <ArrowUturnLeftIcon class="h-5 w-5" />Undo
+      </button>
+      <button
+        v-if="activeGame"
+        class="inline-flex items-center justify-center gap-1 rounded-md px-3 bg-ink-500 py-1 text-xs hover:bg-ink-500/90"
+        title="Export CSV"
+        @click="exportCsv">
+        <FolderArrowDownIcon class="h-5 w-5" />Export
       </button>
       <!-- Mode tabs -->
-      <div class="flex gap-1 ml-auto rounded-lg bg-ink-800 p-0.5">
+      <div v-if="!activeGame" class="flex gap-1 ml-auto rounded-lg bg-ink-800 p-0.5">
         <button
           class="rounded-md px-3 py-1 text-xs font-semibold transition"
           :class="mode === 'game' ? 'bg-rim text-white' : 'text-ink-500 hover:text-chalk'"
@@ -366,19 +381,14 @@ const seasonStats = computed<SeasonRow[]>(() => {
 
       <template v-if="mode === 'game'">
         <button
-          v-if="activeGame"
-          class="rounded-md px-3 bg-ink-500 py-1.5 text-xs hover:bg-ink-500/90"
-          @click="exportCsv"
-        >Export CSV</button>
-        <button
-          v-else
+          v-if="!activeGame"
           class="rounded-md px-3 py-2 text-xs bg-rim hover:bg-rim/80"
           @click="showNewGameSheet = true"
         >New Game</button>
       </template>
     </div>
     
-    <hr class="h-[2px] bg-ink-600 border-0 rounded-lg" />
+    <hr class="h-[2px] bg-ink-700/60 border-0 rounded-lg" />
 
     <p v-if="error" class="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
       {{ error }}
@@ -466,11 +476,6 @@ const seasonStats = computed<SeasonRow[]>(() => {
                   {{ selectedPlayer.name.split(' ')[0] }}
                 </div>
                 <div class="mt-1.5 flex justify-center gap-1">
-                  <button
-                    class="text-[9px] text-ink-500 hover:text-chalk"
-                    title="Undo last stat"
-                    @click="onUndo(selectedPlayerId!)"
-                  >undo</button>
                   <span class="text-ink-700">·</span>
                   <button
                     class="text-[9px] transition"
@@ -496,10 +501,10 @@ const seasonStats = computed<SeasonRow[]>(() => {
           </div>
 
           <!-- Shot chart + box score -->
-          <div class="min-w-0 flex-1 flex flex-col lg:flex-row px-2 lg:px-0 gap-4" style="height: calc(100dvh - 195px)">
+          <div class="min-w-0 flex-1 py-2 flex flex-col lg:flex-row px-2 lg:px-0 gap-4 overflow-y-auto overflow-x-hidden lg:overflow-y-hidden boxscore-shotchart-container">
             
             <!-- Box score (clickable rows to select player) -->
-            <div class="card p-4 w-full h-1/2 min-w-[600px] max-w-[95dvw] overflow-x-auto lg:w-1/2 lg:h-fit lg:overflow-y-hidden lg:min-w-[0px] lg:max-w-full">
+            <div class="card p-2 w-full min-w-[600px] max-w-[95dvw] overflow-auto lg:w-1/2 boxscore lg:overflow-x-hidden lg:overflow-y-auto lg:min-w-[0px] lg:max-w-full">
               <h2 class="mb-3 font-stencil font-bold">Box Score</h2>
               <table class="w-full text-right font-mono text-sm">
                 <thead class="text-ink-500">
@@ -511,12 +516,7 @@ const seasonStats = computed<SeasonRow[]>(() => {
                 </thead>
                 <tbody>
                   <tr
-                    v-for="r in boxScore.sort((a, b) => {
-                      if (a.number && b.number) return a.number - b.number
-                      if (!a.number) return -1
-                      if (!b.number) return 1
-                      return a.name.localeCompare(b.name)
-                    })"
+                    v-for="r in boxScore"
                     :key="r.player_id"
                     class="cursor-pointer border-b border-ink-800 transition"
                     :class="selectedPlayerId === r.player_id

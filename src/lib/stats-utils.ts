@@ -43,7 +43,7 @@ export function buildBoxScore(roster: Player[], evts: StatEvent[]): BoxScoreRow[
       case 'foul': row.pf++; break
     }
   }
-  return [...rows.values()].sort((a, b) => b.pts - a.pts)
+  return [...rows.values()]
 }
 
 export function buildSeasonStats(roster: Player[], evts: StatEvent[]): SeasonRow[] {
